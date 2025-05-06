@@ -1,0 +1,43 @@
+
+#URL of webscraping
+base_url: 'https://www.hamiltoncountyauditor.org/'
+
+search:
+  property_search: '//*[@id="leftFrontPage"]/a[1]'
+
+  # The radio button to select to search by sales. 
+  parcel_id: '//*[@id="search_radio_parcel_id"]'
+  sales_radio_button: '//*[@id="search_radio_sales"]'
+  conventional_home_type: '//*[@id="ms-cama_style"]/div[1]/ul/li[1]'
+  # ac_radio_button: '//*[@id="ac_yes"]'
+  form_search_button: '//*[@id="sales-criteria"]/div[3]/button[1]'
+  parcel_id_search_button: '//*[@id="search_by_parcel_id"]/div[2]/button[1]'
+
+results:
+  results_table: '//*[@id="search-results"]'
+  next_page_button: '//*[@id="search-results_next"]'
+  search_results_number: '//*[@id="search-results_info"]'
+  number_pages: '//*[@id="search-results_paginate"]/span/a[6]'
+
+  first_results_table_page: '//*[@id="search-results_paginate"]/span/a[1]'
+  first_row_results_table: '//*[@id="search-results"]/tbody/tr[1]'
+
+property:
+  # Property summary individual cells XPATH
+  parcel_id: '//*[@id="parcel-header-info"]/div[1]'
+  appraisal_area: '//*[@id="property_information"]/tbody/tr[2]/td[1]/div[2]'
+  school_district: '//*[@id="property_information"]/tbody/tr[1]/td[1]/div[4]'
+  tax_rate: '//*[@id="property_information"]/tbody/tr[4]/td[2]/div[2]'
+  annual_tax: '//*[@id="property_information"]/tbody/tr[4]/td[3]/div[2]'
+  owner: '//*[@id="property_information"]/tbody/tr[3]/td[1]/div[2]'
+
+  # On the property summary page, this is the Next button XPATH
+  next_property: '//*[@id="results-nav"]/a[3]'
+  new_search: '//*[@id="sidebar"]/div[2]/a[1]'
+
+view:
+  property_summary: '//*[@id="parcel-tabs"]/a[1]'
+  appraisal_information: '//*[@id="property_overview_wrapper"]/table[1]'
+  tax_distributions_page: '//*[@id="tax-credit-value-summary"]'
+  transfer_tab: '//*[@id="parcel-tabs"]/a[4]'
+  transfer_table: '/html/body/div/div[3]/div[2]/table'
