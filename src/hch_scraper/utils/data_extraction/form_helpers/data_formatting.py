@@ -95,7 +95,7 @@ def final_csv_conversion(all_data_df, appraisal_data_df, dates, start_date, end_
     # Create concatenated address field
     final_df["new_address"] = np.where(
         final_df["owner_home_address_match"] == "Y",
-        final_df["st_num"] + " " + final_df["street"] + " " + final_df["city"] + ", " + final_df["state"] + final_df["owner_postal_code"],
+        final_df["st_num"] + " " + final_df["street"] + " " + final_df["city"] + ", " + final_df["state"] + " " + final_df["owner_postal_code"],
         final_df["st_num"] + " " + final_df["street"] + " " + final_df["city"] + ", " + final_df["state"]
     )
     

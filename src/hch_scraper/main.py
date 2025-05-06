@@ -16,9 +16,6 @@ from hch_scraper.utils.data_extraction.form_helpers.selenium_utils import safe_q
 from hch_scraper.utils.data_extraction.form_helpers.data_formatting import final_csv_conversion
 from hch_scraper.utils.data_extraction.form_helpers.datetime_utils import check_reset_needed
 
-def install_packages(requirements_files='requirements.txt'):
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", requirements_files])
-
 def get_user_input():
     sale_price_low = int(input("What is the lowest price? "))
     sale_price_high = int(input("What is the highest price? "))
@@ -105,8 +102,6 @@ def main(allowed, start, end, dates, ids, values):
 
 allowed = False
 if __name__ == "__main__":
-    # Check and install requirements
-    install_packages("requirements.txt")
 
     query_ids, query_values, years = get_user_input()
     allowed = False

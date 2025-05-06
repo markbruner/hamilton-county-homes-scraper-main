@@ -6,4 +6,4 @@ python-dotenv
 numpy
 spacy
 pandas
-en_core_web_sm
+lxml
