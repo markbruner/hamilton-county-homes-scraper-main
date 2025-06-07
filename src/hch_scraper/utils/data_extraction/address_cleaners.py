@@ -12,6 +12,36 @@ from hch_scraper.utils.data_extraction.form_helpers.file_io import get_file_path
 
 nlp = spacy.load("en_core_web_sm")
 
+
+def _zip_for_row(address: str, grouped: pd.core.groupby.generic.DataFrameGroupBy, gold) -> str:
+    """Return the ZIP code for a raw address string using centerline ranges."""
+    tags = tag_address(address)
+    street = tags.get("street")
+    if not street:
+        return None
+
+    if street not in grouped.groups:
+        street = _closest_name(street, gold)
+    if street not in grouped.groups:
+        return None
+
+    hnum = int(tags["st_num"]) if tags.get("st_num") else None
+    if hnum is None:
+        return None
+
+    segs = grouped.get_group(street)
+    seg = segs.loc[
+        ((segs.L_F_ADD <= hnum) & (hnum <= segs.L_T_ADD)) |
+        ((segs.R_F_ADD <= hnum) & (hnum <= segs.R_T_ADD))
+    ]
+    if seg.empty:
+        return None
+
+    seg = seg.iloc[0]
+    if hnum % 2 == 0:
+        return seg.ZIPL if seg.L_F_ADD % 2 == 0 else seg.ZIPR
+    return seg.ZIPR if seg.R_F_ADD % 2 == 1 else seg.ZIPL
+
 def _closest_name(bad, valid_names, score_cut=90):
     cand, score, _ = process.extractOne(
         bad, valid_names, scorer=fuzz.token_set_ratio
@@ -19,7 +49,7 @@ def _closest_name(bad, valid_names, score_cut=90):
     return cand if cand and score >= score_cut else bad
 
 def add_zip_code(df: pd.DataFrame,
-                 centerline_path: str = "Countywide_Street_Centerlines.csv",
+                 centerline_path: str = get_file_path(".", 'raw', "County_Street_Centerlines.csv"),
                  address_col: str = "Address") -> pd.DataFrame:
     """
     Return a copy of df with a new 'ZIP' column.
@@ -39,10 +69,10 @@ def add_zip_code(df: pd.DataFrame,
     grouped = center.groupby("CANON")
 
     df = df.copy()
-    df["postal_code"] = df[address_col].apply(_zip_for_row)
+    df["postal_code"] = df[address_col].apply(lambda a: _zip_for_row(a, grouped, gold))
     df["address"] = df[address_col].apply(
-        lambda a: _closest_name(gold)
-    ) 
+        lambda a: _closest_name(a, gold)
+    )
     return df
 
 def is_alphanumeric(token):
@@ -88,7 +118,7 @@ def tag_address(address):
 # ------------------------------------------------------------------
 class AddressEnricher:
     def __init__(self,
-                 centerline_path= get_file_path(".", 'raw', "Countywide_Street_Centerlines.csv"),
+                 centerline_path=get_file_path(".", 'raw', "County_Street_Centerlines.csv"),
                  score_cut=90):
         center = pd.read_csv(centerline_path, low_memory=False)
         needed = ["STRLABEL", "L_F_ADD", "L_T_ADD",

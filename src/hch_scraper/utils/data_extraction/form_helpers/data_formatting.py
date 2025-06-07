@@ -7,7 +7,7 @@ from hch_scraper.utils.logging_setup import logger
 from hch_scraper.config.mappings.street_map import street_type_map
 from hch_scraper.config.mappings.district_map import school_city_map
 
-from hch_scraper.utils.data_extraction.address_cleaners import tag_address, AddressEnricher
+from hch_scraper.utils.data_extraction.address_cleaners import tag_address, address_enricher
 from hch_scraper.geocoding import geocode_until_complete
 from hch_scraper.utils.data_extraction.form_helpers.file_io import get_file_path, save_to_csv
 
@@ -73,7 +73,7 @@ def final_csv_conversion(all_data_df, appraisal_data_df, dates, start_date, end_
                             lambda m: street_type_map[m.group(0)],
                             regex=True
                         )
-    enricher = AddressEnricher()      # load center-lines once
+    enricher = address_enricher      # load center-lines once
 
     # Address processing
     logger.info("Processing address columns for geocoding.")
