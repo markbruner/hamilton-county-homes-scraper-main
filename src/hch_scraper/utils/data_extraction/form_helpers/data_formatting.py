@@ -82,22 +82,13 @@ def final_csv_conversion(all_data_df, appraisal_data_df, dates, start_date, end_
         enrich = enricher.enrich(addr)        # st_num, street_corrected, postal_code
         enrich["parcel_number"] = parcel
         parsed_rows.append(enrich)
-
+    print(parsed_rows)
     address_df = pd.DataFrame(parsed_rows).drop_duplicates()
     logger.debug(address_df.head())
 
     final_df = final_df.merge(address_df, on="parcel_number", how="left")
-
-      # Initialize geocoding-related columns
-    final_df["formatted_address"] = None
-    final_df["city"] = None
-    final_df["state"] = None
-
-    # Add city and state defaults
-    final_df["city"] = "Cincinnati"
-    final_df["state"] = "Ohio"
-
-    final_df["new_address"] = (
+    print(final_df)
+    final_df.loc[:,"new_address"] = (
         final_df["st_num"] + " " +
         final_df["street_corrected"].fillna(final_df["street"]).str.title() + ", " +
         final_df["city"] + ", " +
@@ -118,35 +109,6 @@ def final_csv_conversion(all_data_df, appraisal_data_df, dates, start_date, end_
     # geocoding the addresses of all the homes.
     final_df = geocode_until_complete(final_df)
     
-    cols = ['parcel_number',
-            'address',
-            'bbb',
-            'finsqft',
-            'use',
-            'year_built',	
-            'transfer_date',	
-            'amount',	
-            'total_rooms',	
-            'bedrooms',	
-            'full_baths',	
-            'half_baths',	
-            'conveyance_number',	
-            'deed_type',	
-            'acreage',	
-            'school_district',	
-            'st_num',	
-            'apt_num',	
-            'street',
-            'street_corrected',	
-            'city',	
-            'state',	
-            'new_address',	
-            'formatted_address',	
-            'longitude',	
-            'latitude',
-            ]
-    
-    final_df = final_df[cols]
     # Save CSV files
     homes_csv_path = get_file_path(".", "raw/home_sales", f"homes_{year}.csv")
     all_homes_csv_path = get_file_path(".", "raw/home_sales", "homes_all.csv")

@@ -19,21 +19,23 @@ from hch_scraper.utils.data_extraction.form_helpers.datetime_utils import check_
 
 
 def get_user_input():
-    sale_price_low = int(input("What is the lowest price? "))
-    sale_price_high = int(input("What is the highest price? "))
-    finished_sq_ft_low = int(input("What is the lowest square feet? "))
-    finished_sq_ft_high = int(input("What is the highest square feet? "))
-    bedrooms_low = int(input("What is the lowest number of bedrooms? "))
+    # sale_price_low = int(input("What is the lowest price? "))
+    # sale_price_high = int(input("What is the highest price? "))
+    # finished_sq_ft_low = int(input("What is the lowest square feet? "))
+    # finished_sq_ft_high = int(input("What is the highest square feet? "))
+    # bedrooms_low = int(input("What is the lowest number of bedrooms? "))
 
-    query_ids = ["sale_price_low", "sale_price_high", "finished_sq_ft_low", "finished_sq_ft_high", "bedrooms_low"]
-    query_values = [sale_price_low, sale_price_high, finished_sq_ft_low, finished_sq_ft_high, bedrooms_low]
+    # query_ids = ["sale_price_low", "sale_price_high", "finished_sq_ft_low", "finished_sq_ft_high", "bedrooms_low"]
+    # query_values = [sale_price_low, sale_price_high, finished_sq_ft_low, finished_sq_ft_high, bedrooms_low]
 
     start_year = int(input("What year do you want to start the search? "))
     end_year = int(input("What year do you want to end the search? "))
 
-    return query_ids, query_values, range(start_year, end_year + 1)
+    # return query_ids, query_values, range(start_year, end_year + 1)
+    return range(start_year, end_year + 1)
 
-def run_scraper_for_year(year, allowed, query_ids, query_values):
+# def run_scraper_for_year(year, allowed, query_ids, query_values):
+def run_scraper_for_year(year, allowed):
     start_date = f"01/01/{year}"
     end_date = f"12/31/{year}"
     dates = [(start_date, end_date)]
@@ -49,8 +51,8 @@ def run_scraper_for_year(year, allowed, query_ids, query_values):
                 allowed=allowed,
                 start=start_date,
                 end=end_date,
-                ids=query_ids,
-                values=query_values,
+                # ids=query_ids,
+                # values=query_values,
                 dates=dates
             )
 
@@ -64,7 +66,8 @@ def run_scraper_for_year(year, allowed, query_ids, query_values):
                 all_data_df, appraisal_data_df, dates, start_date, end_date, year
                 )
 
-def main(allowed, start, end, dates, ids, values): 
+# def main(allowed, start, end, dates, ids, values): 
+def main(allowed, start, end, dates): 
     BASE_URL = URLS['base']
     driver, wait = init_driver(BASE_URL)
 
@@ -73,7 +76,8 @@ def main(allowed, start, end, dates, ids, values):
         allowed = check_allowed_webscraping(driver)
 
     try:
-        initialize_search(wait, start, end, ids, values)
+        # initialize_search(wait, start, end, ids, values)
+        initialize_search(wait, start, end)
         time.sleep(2)
         reset_needed, modified, dates, num_properties_to_scrape  = check_reset_needed(driver, wait, start, end, dates)
 
@@ -107,10 +111,12 @@ def main(allowed, start, end, dates, ids, values):
 allowed = False
 if __name__ == "__main__":
 
-    query_ids, query_values, years = get_user_input()
+    # query_ids, query_values, years = get_user_input()
+    years = get_user_input()
     allowed = False
 
     # Main loop to process each year
     for year in years:
         logger.info(f"Starting scraping process for year {year}")
-        run_scraper_for_year(year, allowed, query_ids, query_values)
+        # run_scraper_for_year(year, allowed, query_ids, query_values)
+        run_scraper_for_year(year, allowed)

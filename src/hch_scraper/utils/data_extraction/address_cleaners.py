@@ -1,5 +1,6 @@
 import re
 import pandas as pd
+import numpy as np
 
 import rapidfuzz
 from rapidfuzz import process, fuzz
@@ -42,7 +43,7 @@ def _zip_for_row(address: str, grouped: pd.core.groupby.generic.DataFrameGroupBy
         return seg.ZIPL if seg.L_F_ADD % 2 == 0 else seg.ZIPR
     return seg.ZIPR if seg.R_F_ADD % 2 == 1 else seg.ZIPL
 
-def _closest_name(bad, valid_names, score_cut=90):
+def _closest_name(bad, valid_names, score_cut=80):
     cand, score, _ = process.extractOne(
         bad, valid_names, scorer=fuzz.token_set_ratio
     )
@@ -58,7 +59,7 @@ def add_zip_code(df: pd.DataFrame,
     # --- load & prepare centerline reference ------------------------
     center = pd.read_csv(centerline_path, low_memory=False)
     for col in ["STRLABEL", "L_F_ADD", "L_T_ADD", "R_F_ADD",
-                "R_T_ADD", "ZIPL", "ZIPR"]:
+                "R_T_ADD", "ZIPL", "ZIPR", "zip_code", "city"]:
         if col not in center.columns:
             raise ValueError(f"Centerline CSV missing expected column '{col}'")
 
@@ -119,10 +120,30 @@ def tag_address(address):
 class AddressEnricher:
     def __init__(self,
                  centerline_path=get_file_path(".", 'raw', "Countywide_Street_Centerlines.csv"),
-                 score_cut=90):
+                 zipcode_path=get_file_path(".", 'raw', "Countywide_Zip_Codes.csv"),
+                 score_cut=80):
+        
+        #Load csv files
         center = pd.read_csv(centerline_path, low_memory=False)
+        zip_df = pd.read_csv(zipcode_path, low_memory=False)
+
+        #Prepare zip to city mapping
+        zip_map = (
+            zip_df[["ZIPCODE", "USPSCITY"]]
+            .dropna(subset=["ZIPCODE", "USPSCITY"])
+            .drop_duplicates("ZIPCODE")
+            .rename(columns={"ZIPCODE": "zip_code", "USPSCITY": "city"})
+        )
+        center.loc[center["ZIPL"]==' ',"ZIPL"] = 0
+        center.loc[center["ZIPR"]==' ',"ZIPR"] = 0
+        # In centerlines, pick one ZIP per segment
+        center["zip_code"] = center["ZIPL"].fillna(center["ZIPR"]).fillna(0).astype(int)
+
+        # 4. Merge (no duplicates in centerlines)
+        center = center.merge(zip_map, on="zip_code", how="left")
+
         needed = ["STRLABEL", "L_F_ADD", "L_T_ADD",
-                  "R_F_ADD", "R_T_ADD", "ZIPL", "ZIPR"]
+                  "R_F_ADD", "R_T_ADD", "ZIPL", "ZIPR", "zip_code", "city"]
         missing = [c for c in needed if c not in center.columns]
         if missing:
             raise ValueError(f"Centerline CSV missing {missing}")
@@ -142,7 +163,7 @@ class AddressEnricher:
 
         # nothing to do if we couldn't parse a street name
         if not tags["street"]:
-            return {**tags, "postal_code": None, "street_corrected": None}
+            return {**tags, "postal_code": None, "street_corrected": None, "city": None}
 
         canon_street = tags["street"]
 
@@ -152,11 +173,12 @@ class AddressEnricher:
             )
         # Still None?  Return tags unchanged
         if canon_street is None or canon_street not in self._grouped.groups:
-            return {**tags, "postal_code": None, "street_corrected": None}
+            return {**tags, "postal_code": None, "street_corrected": None, "city": None}
 
         # ZIP via range logic --------------------------------------
         hnum = int(tags["st_num"]) if tags["st_num"] else None
         zip_code = None
+        city = None
         if hnum is not None:
             segs = self._grouped.get_group(canon_street)
             seg = segs.loc[
@@ -165,6 +187,7 @@ class AddressEnricher:
             ]
             if not seg.empty:
                 seg = seg.iloc[0]
+                city = seg.city
                 if hnum % 2 == 0:
                     zip_code = seg.ZIPL if seg.L_F_ADD % 2 == 0 else seg.ZIPR
                 else:
@@ -173,7 +196,9 @@ class AddressEnricher:
         return {
             **tags,
             "postal_code": zip_code,
-            "street_corrected": canon_street
+            "street_corrected": canon_street,
+            "city": city,
+            "state":"Ohio",
         }
 
 

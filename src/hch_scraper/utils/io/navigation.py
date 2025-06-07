@@ -1,5 +1,5 @@
 import time
-
+import numpy as np
 from urllib.robotparser import RobotFileParser
 
 # Selenium-related imports
@@ -64,7 +64,8 @@ def next_navigation(driver, wait, xpath):
     except NoSuchElementException:
         return False  # "Next" button doesn"t exist
 
-def initialize_search(wait,start,end,ids,values):
+# def initialize_search(wait,start,end,ids,values):
+def initialize_search(wait,start,end):
     
     safe_click(wait,XPATHS["search"]["property_search"])
     safe_click(wait,XPATHS["search"]["sales_radio_button"]) 
@@ -73,8 +74,8 @@ def initialize_search(wait,start,end,ids,values):
     fill_form_field(wait, "sale_date_high", end)
 
     # Form values to filter search.
-    for field_id, value in zip(ids, values):
-        fill_form_field(wait, field_id, value)
+    # for field_id, value in zip(ids, values):
+    #     fill_form_field(wait, field_id, value)
 
     # Click conventional style
     for xpath in form_xpaths_list:

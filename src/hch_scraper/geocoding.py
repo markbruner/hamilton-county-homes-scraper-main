@@ -67,29 +67,44 @@ def get_geocodes(address: str, parcel_number: str) -> dict:
                      or hit.get("county"))
             state = hit.get("region_code") or hit.get("region")
             geocode = {
-                "formatted_address": hit.get("label"),
+                "formatted_address": hit.get("name")+", "+city+", "+state+" "+hit.get("postal_code"),
                 "longitude": hit.get("longitude"),
                 "latitude":  hit.get("latitude"),
-                "city":  city.upper() if city else None,
-                "state": state.upper() if state else None,
+                "house_num": hit.get("house_num"),
+                "street_name":hit.get("street"),
+                "api_city":  city.upper() if city else None,
+                "county":hit.get("county"),
+                "api_state": state.upper() if state else None,
+                "api_postal_code":hit.get("postal_code"),
+                "confidence": hit.get("confidence"),
             }
         else:
             geocode = {
                 "formatted_address": None,
                 "longitude": None,
                 "latitude": None,
-                "city": None,
-                "state": None,
+                "house_num": None,
+                "street_name": None,
+                "api_city": None,
+                "county": None,
+                "api_state": None,
+                "api_postal_code": None,
+                "confidence": None,
             }
     except Exception as e:
         logger.warning(f"Geocoding error for parcel {parcel_number}: {e}")
         geocode = {
-            "formatted_address": None,
-            "longitude": None,
-            "latitude": None,
-            "city": None,
-            "state": None,
-        }
+                "formatted_address": None,
+                "longitude": None,
+                "latitude": None,
+                "house_num": None,
+                "street_name": None,
+                "api_city": None,
+                "county": None,
+                "api_state": None,
+                "api_postal_code": None,
+                "confidence": None,
+                }
 
     geocode_cache[parcel_number] = geocode
     return geocode
@@ -116,15 +131,27 @@ def geocode_until_complete(final_df: pd.DataFrame, batchsize: int = 10) -> pd.Da
                 try:
                     geo = get_geocodes(address, parcel_number)
                     sel = final_df["parcel_number"] == parcel_number
-
-                    final_df.loc[sel, ["formatted_address",
-                                       "longitude", "latitude",
-                                       "city", "state"]] = [
+                    cols = ["formatted_address"
+                            ,"longitude"
+                            ,"latitude"
+                            ,"house_num"
+                            ,"street_name"
+                            ,"api_city"
+                            ,"county"
+                            ,"api_state"
+                            ,"api_postal_code"
+                            ,"confidence"]
+                    final_df.loc[sel, cols] = [
                         geo["formatted_address"],
                         geo["longitude"],
                         geo["latitude"],
-                        geo["city"],
-                        geo["state"],
+                        geo["house_num"],
+                        geo["street_name"],
+                        geo["api_city"],
+                        geo["county"],
+                        geo["api_state"],
+                        geo["api_postal_code"],
+                        geo["confidence"],
                     ]
                 except Exception as e:
                     logger.warning(f"Failed to geocode parcel {parcel_number}: {e}")

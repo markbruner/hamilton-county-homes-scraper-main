@@ -12,7 +12,7 @@ XPATHS = load_config(CONFIG_PATH)
 
 # Form elements used in multiple scrapers
 form_xpaths_list = [
-    XPATHS["search"]["conventional_home_type"],
+    # XPATHS["search"]["conventional_home_type"],
     XPATHS["search"]["form_search_button"]
 ]
 
