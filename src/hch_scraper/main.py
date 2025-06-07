@@ -16,6 +16,8 @@ from hch_scraper.utils.data_extraction.form_helpers.selenium_utils import safe_q
 from hch_scraper.utils.data_extraction.form_helpers.data_formatting import final_csv_conversion
 from hch_scraper.utils.data_extraction.form_helpers.datetime_utils import check_reset_needed
 
+
+
 def get_user_input():
     sale_price_low = int(input("What is the lowest price? "))
     sale_price_high = int(input("What is the highest price? "))
@@ -58,9 +60,9 @@ def run_scraper_for_year(year, allowed, query_ids, query_values):
             all_data_df = pd.concat([all_data_df, all_data], axis=0, ignore_index=True)
             appraisal_data_df = pd.concat([appraisal_data_df, appraisal_data], axis=0, ignore_index=True)
 
-            csv_path_dict, final_df = final_csv_conversion(
-            all_data_df, appraisal_data_df, dates, start_date, end_date, year
-            )
+            final_csv_conversion(
+                all_data_df, appraisal_data_df, dates, start_date, end_date, year
+                )
 
 def main(allowed, start, end, dates, ids, values): 
     BASE_URL = URLS['base']
@@ -87,12 +89,14 @@ def main(allowed, start, end, dates, ids, values):
         assert all_data, "No all_data returned!"
         assert appraisal_data, "No appraisal_data returned!"            
         # Consolidate data
-
         all_data_df = pd.concat(all_data).reset_index(drop=True)
         all_data_df.columns = ['Parcel Number', 'Address', 'BBB', 'FinSqFt', 'Use', 'Year Built','Transfer Date', 'Amount']
         appraisal_data_df = pd.concat(appraisal_data).reset_index(drop=True)
 
-        logger.info(f'Completed the main scraping of property data for {start} and {end}. Beginning address cleaning and converting to a csv file.')
+        logger.info(
+            f"Completed scraping for {start}–{end}: "
+            f"{all_data_df.shape[0]} rows (ZIP enriched)."
+        )
         return all_data_df, appraisal_data_df, dates, driver, modified
     
     finally:

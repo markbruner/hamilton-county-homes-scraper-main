@@ -30,7 +30,7 @@ hamilton-county-homes-scraper-main/
 
 ### 1. Clone the Repo
 git clone https://github.com/your-username/hamilton-county-homes-scraper-main.git
-cd hamilton-county-homes-dashboard 
+cd hamilton-county-homes-scraper-main
 
 ### 2. Create a Virtual Environment
 python -m venv venv

@@ -1,9 +1,49 @@
 import re
 import pandas as pd
+
+import rapidfuzz
+from rapidfuzz import process, fuzz
 import difflib
 import spacy
 
+from hch_scraper.config.mappings.street_map import street_type_map
+from hch_scraper.config.mappings.direction_map import direction_map
+from hch_scraper.utils.data_extraction.form_helpers.file_io import get_file_path
+
 nlp = spacy.load("en_core_web_sm")
+
+def _closest_name(bad, valid_names, score_cut=90):
+    cand, score, _ = process.extractOne(
+        bad, valid_names, scorer=fuzz.token_set_ratio
+    )
+    return cand if cand and score >= score_cut else bad
+
+def add_zip_code(df: pd.DataFrame,
+                 centerline_path: str = "Countywide_Street_Centerlines.csv",
+                 address_col: str = "Address") -> pd.DataFrame:
+    """
+    Return a copy of df with a new 'ZIP' column.
+    Requires df[address_col] to contain full street addresses as scraped.
+    """
+    # --- load & prepare centerline reference ------------------------
+    center = pd.read_csv(centerline_path, low_memory=False)
+    for col in ["STRLABEL", "L_F_ADD", "L_T_ADD", "R_F_ADD",
+                "R_T_ADD", "ZIPL", "ZIPR"]:
+        if col not in center.columns:
+            raise ValueError(f"Centerline CSV missing expected column '{col}'")
+
+    center["CANON"] = center["NAME,.  "]
+    gold = center["CANON"].unique()
+
+    # group by street for fast range checks
+    grouped = center.groupby("CANON")
+
+    df = df.copy()
+    df["postal_code"] = df[address_col].apply(_zip_for_row)
+    df["address"] = df[address_col].apply(
+        lambda a: _closest_name(gold)
+    ) 
+    return df
 
 def is_alphanumeric(token):
     """Check if the token text is alphanumeric."""
@@ -12,39 +52,6 @@ def is_alphanumeric(token):
 def correct_street_name_fuzzy(street_name, valid_names, cutoff=0.8):
     matches = difflib.get_close_matches(street_name, valid_names, n=1, cutoff=cutoff)
     return matches[0] if matches else street_name
-
-def owner_address_cleaner(df, field='owner_address'):
-    """
-    Parses a multiline address column into separate components: street, city, state, and postal code.
-    Adds these as new columns and tags whether the owner's address matches the home address.
-
-    Parameters:
-    - df (pd.DataFrame): The DataFrame containing the address column.
-    - field (str): The name of the column containing the owner's full address. Defaults to 'owner_address'.
-
-    Returns:
-    - pd.DataFrame: The original DataFrame with additional columns:
-        - 'owner_street_address'
-        - 'owner_city'
-        - 'owner_state'
-        - 'owner_postal_code'
-        - 'owner_home_address_match': 'Y' if match is found, 'N' otherwise.
-    """
-
-    # Regex pattern to extract address, city, state, and postal code
-    pattern = r"(?P<address>.+)\r?\n(?:(?P<city>[A-Z\s]+) (?P<state>[A-Z]{2}) )?(?P<postal_code>\d{5})"
-
-    # Getting the details using regex
-    extracted_data = df[field].str.extract(pattern)
-
-    # Replacing the columns with more descriptive names
-    extracted_data.columns = ["owner_street_address", "owner_city", "owner_state", "owner_postal_code"]
-    # Joining data back
-    df = pd.concat([df,extracted_data],axis=1)
-
-    df.loc[df["address"].str.split(expand=True)[0]==df["owner_street_address"].str.split(expand=True)[0],"owner_home_address_match"] = "Y"
-    df.loc[df["owner_home_address_match"]!="Y","owner_home_address_match"] = "N"
-    return df
 
 def tag_address(address):
     """
@@ -75,3 +82,70 @@ def tag_address(address):
             tagged_components["street"] = " ".join([tok.text for tok in doc[i:]])
             break
     return tagged_components
+
+# ------------------------------------------------------------------
+#  ADDRESS ENRICHER – one-time loader you can reuse in callbacks etc.
+# ------------------------------------------------------------------
+class AddressEnricher:
+    def __init__(self,
+                 centerline_path= get_file_path(".", 'raw', "Countywide_Street_Centerlines.csv"),
+                 score_cut=90):
+        center = pd.read_csv(centerline_path, low_memory=False)
+        needed = ["STRLABEL", "L_F_ADD", "L_T_ADD",
+                  "R_F_ADD", "R_T_ADD", "ZIPL", "ZIPR"]
+        missing = [c for c in needed if c not in center.columns]
+        if missing:
+            raise ValueError(f"Centerline CSV missing {missing}")
+
+        center["CANON"] = center["STRLABEL"]
+        self._grouped  = center.groupby("CANON")
+        self._gold     = center["CANON"].unique()
+        self._score_cut = score_cut
+
+    # ---------- public --------------
+    def enrich(self, raw_address: str) -> dict:
+        """
+        Split the raw string, correct the street name, attach ZIP,
+        and return everything in one dict.
+        """
+        tags = tag_address(raw_address)          # your existing parser
+
+        # nothing to do if we couldn't parse a street name
+        if not tags["street"]:
+            return {**tags, "postal_code": None, "street_corrected": None}
+
+        canon_street = tags["street"]
+
+        if canon_street not in self._grouped.groups:
+            canon_street = _closest_name(
+                canon_street, self._gold, score_cut=self._score_cut
+            )
+        # Still None?  Return tags unchanged
+        if canon_street is None or canon_street not in self._grouped.groups:
+            return {**tags, "postal_code": None, "street_corrected": None}
+
+        # ZIP via range logic --------------------------------------
+        hnum = int(tags["st_num"]) if tags["st_num"] else None
+        zip_code = None
+        if hnum is not None:
+            segs = self._grouped.get_group(canon_street)
+            seg = segs.loc[
+                ((segs.L_F_ADD <= hnum) & (hnum <= segs.L_T_ADD)) |
+                ((segs.R_F_ADD <= hnum) & (hnum <= segs.R_T_ADD))
+            ]
+            if not seg.empty:
+                seg = seg.iloc[0]
+                if hnum % 2 == 0:
+                    zip_code = seg.ZIPL if seg.L_F_ADD % 2 == 0 else seg.ZIPR
+                else:
+                    zip_code = seg.ZIPR if seg.R_F_ADD % 2 == 1 else seg.ZIPL
+
+        return {
+            **tags,
+            "postal_code": zip_code,
+            "street_corrected": canon_street
+        }
+
+
+# instantiate once so every downstream module can import & reuse it
+address_enricher = AddressEnricher()

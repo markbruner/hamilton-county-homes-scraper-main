@@ -1,6 +1,11 @@
 import time
 import random 
 import pandas as pd
+import math
+import re
+
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
 
 import hch_scraper.utils.logging_setup  
 from hch_scraper.utils.logging_setup import logger
@@ -8,6 +13,54 @@ from hch_scraper.config.settings import XPATHS
 from hch_scraper.utils.data_extraction.form_helpers.selenium_utils import get_text
 from hch_scraper.utils.data_extraction.table_extraction import scrape_table_by_xpath, transform_table, find_click_row
 from hch_scraper.utils.io.navigation import safe_click, next_navigation
+
+def _dt_num_pages(driver):
+    """
+    Ask DataTables directly.  Returns an int or None.
+    """
+    try:
+        return driver.execute_script("""
+            const $ = window.jQuery;
+            if (!$ || !$.fn.dataTable) return null;
+            const dt = $('#resultsTable').DataTable();        // adjust selector!
+            return dt ? dt.page.info().pages : null;
+        """)
+    except Exception:
+        return None
+
+
+def _pagination_li_count(driver):
+    """
+    Count <li class="paginate_button"> elements in the pagination bar.
+    Works when Bootstrap pagination is used.
+    """
+    try:
+        lis = driver.find_elements(By.CSS_SELECTOR,
+                                   "ul.pagination li.paginate_button:not(.next):not(.previous)")
+        return len(lis) or None
+    except Exception:
+        return None
+
+
+def _pages_from_status_text(driver, wait):
+    """
+    Parse something like 'Showing 1 to 10 of 121 entries' → ceil(121/10) = 13.
+    """
+    try:
+        text = wait.until(
+            EC.presence_of_element_located(
+                (By.XPATH, XPATHS["results"]["search_results_number"])
+            )
+        ).text
+        # Pull the two numbers we need: '10' (rows per page) and '121' (total)
+        m = re.search(r"to\s+(\d+)\s+of\s+([\d,]+)", text)
+        if not m:
+            return None
+        rows_per_page = int(m.group(1).replace(",", ""))
+        total_rows    = int(m.group(2).replace(",", ""))
+        return math.ceil(total_rows / rows_per_page)
+    except Exception:
+        return None
 
 def extract_property_details(driver, wait):
     """
@@ -21,7 +74,7 @@ def extract_property_details(driver, wait):
     """
     try:
         # Retrieve and process the parcel ID
-        parcel_text = get_text(driver, wait, XPATHS["property"]["parcel_id"])
+        parcel_text = get_text(driver, wait, XPATHS["property"]["parcel_id"],retries=1)
         parcel_parts = parcel_text.split("\n")
         if len(parcel_parts) < 2 or not parcel_parts[1].strip():
             logger.warning(f"Unexpected format for parcel_id: {parcel_text}")
@@ -52,8 +105,7 @@ def extract_property_details(driver, wait):
 
         # Add additional property details
         appraisal_table["parcel_id"] = parcel_id
-        appraisal_table["school_district"] = get_text(driver, wait, XPATHS["property"]["school_district"])
-        appraisal_table["owner_address"] = get_text(driver, wait, XPATHS["property"]["owner"])
+        appraisal_table["school_district"] = get_text(driver, wait, XPATHS["property"]["school_district"],retries=1)
 
         return appraisal_table
 
@@ -73,27 +125,33 @@ def scrape_results_page(wait):
 
 def scrape_summary_pages(driver, wait):
     """
-    Scrapes paginated search results (summary tables) and returns a list of DataFrames.
+    Scrapes paginated search-results tables and returns a list of DataFrames.
     """
+    # 1 Work out how many pages really exist
+    num_pages = (_dt_num_pages(driver)
+                 or _pagination_li_count(driver)
+                 or _pages_from_status_text(driver, wait)
+                 or 1)
+
+    if num_pages == 1:
+        logger.warning("Could not determine number of pages, defaulting to 1.")
+
     all_data = []
-    try:
-        num_pages = pd.to_numeric(get_text(driver, wait, XPATHS["results"]["number_pages"]))
-    except Exception as e:
-        logger.warning(f"Could not determine number of pages. Defaulting to 1. Error: {e}")
-        num_pages = 1
-
     for i in range(num_pages):
-        logger.info(f"Scraping summary page {i+1} of {num_pages}...")
-        table = scrape_table_by_xpath(wait, XPATHS["results"]["results_table"])
+        logger.info(f"Scraping summary page {i + 1} of {num_pages} …")
 
+        table = scrape_table_by_xpath(wait, XPATHS["results"]["results_table"])
         if table is not None and not table.empty:
             all_data.append(table)
         else:
-            logger.warning(f"No data found on page {i+1}.")
+            logger.warning(f"No data found on page {i + 1}; stopping early.")
             break
 
-        if not next_navigation(driver, wait, XPATHS["results"]["next_page_button"]):
-            break
+        # advance to next page unless we're on the last one
+        if i + 1 < num_pages:
+            if not next_navigation(driver, wait, XPATHS["results"]["next_page_button"]):
+                logger.warning("Next-page click failed early.  Stopping.")
+                break
 
     return all_data
 
@@ -132,4 +190,3 @@ def scrape_data(driver, wait, num_properties_to_scrape):
         "summary": summary_data,
         "details": detail_data
     }
-

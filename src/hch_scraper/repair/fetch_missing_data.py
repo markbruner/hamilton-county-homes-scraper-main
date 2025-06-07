@@ -42,7 +42,6 @@ def extract_patched_property_details(driver, id, wait):
         # Add additional property details
         appraisal_table["parcel_id"] = id
         appraisal_table["school_district"] = get_text(driver, wait, XPATHS["property"]["school_district"])
-        appraisal_table["owner_address"] = get_text(driver, wait, XPATHS["property"]["owner"])
 
         return appraisal_table
 

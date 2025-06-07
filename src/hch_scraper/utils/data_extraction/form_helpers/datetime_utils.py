@@ -1,10 +1,33 @@
+import re
 import pandas as pd
 from datetime import timedelta, datetime
- 
+
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
+
 import hch_scraper.utils.logging_setup 
 from hch_scraper.utils.logging_setup import logger
 from hch_scraper.config.settings import XPATHS
 from hch_scraper.utils.data_extraction.form_helpers.selenium_utils import get_text, safe_quit
+
+# datetime_utils.py  (new code – place after imports)
+def _get_dt_record_count(driver):
+    """
+    Return the total row count reported by DataTables, or None if
+    jQuery/DataTables isn’t present yet.
+    """
+    try:
+        return driver.execute_script("""
+            const $ = window.jQuery;
+            if (!$ || !$.fn.dataTable) return null;
+
+            // Adjust '#resultsTable' if your table uses a different id
+            const table = $('#resultsTable').DataTable();
+            return table ? table.page.info().recordsDisplay : null;
+        """)
+    except Exception:
+        return None
+
 
 def safe_to_datetime(date, description="date"):
     try:
@@ -46,7 +69,7 @@ def split_replace_add_time_slice(dates, old_date, new_date, additional_slice):
     """
     # Validate inputs
     if not isinstance(dates, list) or not all(isinstance(d, tuple) and len(d) == 2 for d in dates):
-        logger.error("Dates must be a list of tuples with start and end dates. The dates in the list are: f{dates}")
+        logger.error(f"Dates must be a list of tuples with start and end dates. The dates in the list are: {dates}")
         raise ValueError("Invalid dates format")
     if not isinstance(additional_slice, tuple) or len(additional_slice) != 2:
         logger.error("Additional slice must be a tuple with two elements (start, end).")
@@ -100,9 +123,29 @@ def check_reset_needed(driver, wait, start, end, dates):
     end_dt = safe_to_datetime(end, "end date")
 
     try:
-        # Getting the number of search results based on the critieria provided by user
-        raw_text = get_text(driver, wait, XPATHS["results"]["search_results_number"])
-        total_entries = pd.to_numeric(raw_text.split(" ")[5].replace(",", ""))
+        # A) ask DataTables directly
+        total_entries = _get_dt_record_count(driver)
+
+        # B) fall back to parsing the status string
+        if total_entries is None:
+            try:
+                elem = wait.until(
+                    EC.presence_of_element_located(
+                        (By.XPATH, XPATHS["results"]["search_results_number"])
+                    )
+                )
+                raw_text = elem.text                      # "Showing 1 to 10 of 121 entries"
+                # robust regex: look for "of <number> entries"
+                m = re.search(r"of\s+([\d,]+)\s+entries", raw_text, re.I)
+                if m:
+                    total_entries = int(m.group(1).replace(",", ""))
+                else:
+                    # last-ditch: take the largest number in the string
+                    nums = re.findall(r"\d+", raw_text)
+                    total_entries = int(max(nums)) if nums else None
+            except Exception:
+                total_entries = None
+
     except Exception as e:
         raise ValueError(f"Failed to extract number of entries: {e}")   
 

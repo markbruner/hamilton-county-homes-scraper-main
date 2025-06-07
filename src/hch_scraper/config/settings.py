@@ -112,7 +112,7 @@ home_type_map = {
     '352': 'Mini Warehouse',
     '360': 'Truck Terminal',
     '370': 'Small Shop',
-    '380': 'Mines & Ouarries',
+    '380': 'Mines & Quarries',
     '389': 'Utility',
     '390': 'Grain Elevator',
     '399': 'Other',

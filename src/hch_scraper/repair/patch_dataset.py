@@ -10,7 +10,6 @@ from hch_scraper.repair.identify_missing import find_missing_rows
 from hch_scraper.repair.fetch_missing_data import patch_data
 from hch_scraper.driver_setup import init_driver
 from hch_scraper.utils.io.navigation import safe_click
-from hch_scraper.utils.data_extraction.address_cleaners import owner_address_cleaner
 from hch_scraper.config.settings import  XPATHS, URLS
 from hch_scraper.utils.data_extraction.form_helpers.data_formatting import clean_and_format_columns
 
@@ -30,12 +29,7 @@ cols = [
     'conveyance_number',
     'deed_type',
     'acreage',
-    'school_district',
-    'owner_address',
-    'owner_street_address',
-    'owner_city',
-    'owner_state',
-    'owner_postal_code'
+    'school_district'
 ]
 
 if __name__ == "__main__":
@@ -52,7 +46,6 @@ if __name__ == "__main__":
         appraisal_table['address'] = homes.loc[mask,'address'].values[0]
         appraisal_table = pd.DataFrame(appraisal_table)
         appraisal_table = clean_and_format_columns(appraisal_table,['Transfer Date'])
-        appraisal_table = owner_address_cleaner(appraisal_table)
     
         for col in cols:
             homes[col] = homes[col].astype(str)
