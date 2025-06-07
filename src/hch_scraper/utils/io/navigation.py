@@ -90,7 +90,7 @@ def check_allowed_webscraping(driver):
     rp.read()
 
     if rp.can_fetch("*", BASE_URL):
-        print(f"Scraping allowed for {BASE_URL}")
+        logger.info(f"Scraping allowed for {BASE_URL}")
         return True
     else:
         print(f"Scraping NOT allowed for {BASE_URL}")

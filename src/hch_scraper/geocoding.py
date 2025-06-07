@@ -47,7 +47,7 @@ def get_geocodes(address: str, parcel_number: str) -> dict:
     params = urllib.parse.urlencode({
         "access_key": API_KEY,
         "query":      address,
-        "region":     "OH",     # ⇢ helps disambiguate
+        "region":     "Ohio",  # API requires >=3 chars
         "country":    "US",
         "limit":      1
     })
@@ -57,7 +57,8 @@ def get_geocodes(address: str, parcel_number: str) -> dict:
         conn.request('GET', '/v1/forward?{}'.format(params))
         resp = conn.getresponse()
         data = resp.read()
-        print(data.decode('utf-8'))
+        conn.close()  # close HTTP connection
+        logger.debug(data.decode('utf-8'))
         data = json.loads(data.decode('utf-8'))
         if data.get('data'):
             hit   = data['data'][0]

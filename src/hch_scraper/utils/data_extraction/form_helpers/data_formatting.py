@@ -84,7 +84,7 @@ def final_csv_conversion(all_data_df, appraisal_data_df, dates, start_date, end_
         parsed_rows.append(enrich)
 
     address_df = pd.DataFrame(parsed_rows).drop_duplicates()
-    print(address_df.head())
+    logger.debug(address_df.head())
 
     final_df = final_df.merge(address_df, on="parcel_number", how="left")
 
@@ -105,9 +105,9 @@ def final_csv_conversion(all_data_df, appraisal_data_df, dates, start_date, end_
         final_df["postal_code"]
         ).str.replace(r"\s+", " ", regex=True).str.strip(", ")
 
-    print(final_df["street_corrected"]) 
-    print(final_df['new_address'])
-
+    logger.debug(final_df["street_corrected"])
+    logger.debug(final_df['new_address'])
+    
     final_df = final_df.drop_duplicates()
     logger.info(f'Removing these dates: {start_date} and {end_date}')
     dates.remove((start_date, end_date))

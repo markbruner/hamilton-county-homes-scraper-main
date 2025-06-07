@@ -7,8 +7,5 @@ numpy
 spacy
 pandas
 lxml
-<<<<<<< HEAD
 RapidFuzz
-=======
 pytest
->>>>>>> 64d1ed06531f81b884a58c10d2f7d781f0bf6969
