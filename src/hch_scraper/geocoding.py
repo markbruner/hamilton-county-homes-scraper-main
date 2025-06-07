@@ -58,8 +58,9 @@ def get_geocodes(address: str, parcel_number: str) -> dict:
         resp = conn.getresponse()
         data = resp.read()
         print(data.decode('utf-8'))
-        if data:
-            hit   = data[0]
+        data = json.loads(data.decode('utf-8'))
+        if data.get('data'):
+            hit   = data['data'][0]
             city  = (hit.get("locality")
                      or hit.get("administrative_area")
                      or hit.get("county"))

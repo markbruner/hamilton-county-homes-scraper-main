@@ -36,7 +36,7 @@ cd hamilton-county-homes-scraper-main
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-### 3. Intall Dependencies
+### 3. Install Dependencies
 pip install -r requirements.txt
 
 ### 4. Set Environment Variables

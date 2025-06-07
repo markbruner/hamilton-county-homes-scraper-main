@@ -19,6 +19,37 @@ sys.modules.setdefault(
     )
 )
 
+# Stub selenium package hierarchy so datetime_utils can be imported without the
+# real selenium dependency
+selenium = types.ModuleType("selenium")
+webdriver = types.ModuleType("selenium.webdriver")
+webdriver_support = types.ModuleType("selenium.webdriver.support")
+webdriver_support.expected_conditions = types.SimpleNamespace()
+webdriver_common = types.ModuleType("selenium.webdriver.common")
+webdriver_common_by = types.SimpleNamespace(By=type("By", (), {}))
+selenium_common = types.ModuleType("selenium.common")
+selenium_common_exceptions = types.ModuleType("selenium.common.exceptions")
+for exc in [
+    "ElementClickInterceptedException",
+    "TimeoutException",
+    "StaleElementReferenceException",
+]:
+    setattr(selenium_common_exceptions, exc, type(exc, (), {}))
+selenium_common.exceptions = selenium_common_exceptions
+
+sys.modules.setdefault("selenium", selenium)
+sys.modules.setdefault("selenium.webdriver", webdriver)
+sys.modules.setdefault("selenium.webdriver.support", webdriver_support)
+sys.modules.setdefault(
+    "selenium.webdriver.support.expected_conditions",
+    webdriver_support.expected_conditions,
+)
+sys.modules.setdefault("selenium.webdriver.common", webdriver_common)
+sys.modules.setdefault("selenium.webdriver.common.by", webdriver_common_by)
+sys.modules.setdefault("selenium.common", selenium_common)
+sys.modules.setdefault("selenium.common.exceptions", selenium_common_exceptions)
+
+
 # Stub selenium_utils to avoid importing selenium dependency
 selenium_utils = types.ModuleType("selenium_utils")
 selenium_utils.get_text = lambda *args, **kwargs: ""
