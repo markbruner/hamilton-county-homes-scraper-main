@@ -88,7 +88,12 @@ def final_csv_conversion(all_data_df, appraisal_data_df, dates, start_date, end_
 
     final_df = final_df.merge(address_df, on="parcel_number", how="left")
 
-    # Add city and state
+      # Initialize geocoding-related columns
+    final_df["formatted_address"] = None
+    final_df["city"] = None
+    final_df["state"] = None
+
+    # Add city and state defaults
     final_df["city"] = "Cincinnati"
     final_df["state"] = "Ohio"
 
@@ -101,11 +106,11 @@ def final_csv_conversion(all_data_df, appraisal_data_df, dates, start_date, end_
         ).str.replace(r"\s+", " ", regex=True).str.strip(", ")
 
     print(final_df["street_corrected"]) 
-    print(final_df['new_address'])   
+    print(final_df['new_address'])
+
     final_df = final_df.drop_duplicates()
     logger.info(f'Removing these dates: {start_date} and {end_date}')
     dates.remove((start_date, end_date))
-
 
     final_df['latitude'] = np.nan
     final_df['longitude'] = np.nan

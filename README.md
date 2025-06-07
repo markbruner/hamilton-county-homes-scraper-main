@@ -17,7 +17,8 @@ hamilton-county-homes-scraper-main/
     ├── src/hch_scraper # Core project code 
     │ ├── config/ # Config files and selectors
     | ├── repair/ # helps patch missing data from dataset
-    │ └── utils/ # Reusable helper functions ├── .env # API keys or secrets (not committed) 
+    │ └── utils/ # Reusable helper functions ├
+    ├── .env # API keys or secrets (not committed) 
     ├── driver_setup.py # Creates the driver
     ├── main.py # Main script that runs the scraper
     ├── scraper.py # Sets up 
@@ -34,7 +35,7 @@ cd hamilton-county-homes-scraper-main
 
 ### 2. Create a Virtual Environment
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate  # On Windows: .\venv\Scripts\Activate.ps1
 
 ### 3. Install Dependencies
 pip install -r requirements.txt
