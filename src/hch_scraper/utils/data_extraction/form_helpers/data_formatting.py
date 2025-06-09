@@ -119,8 +119,6 @@ def final_csv_conversion(all_data_df, appraisal_data_df, dates, start_date, end_
     
     return {"homes_csv": homes_csv_path, "all_homes_csv": all_homes_csv_path, "geocoded_homes_csv":geocoded_homes_csv_path}
 
-
-
 def clean_and_format_columns(df, drop_cols):
     """
     Replaces the current df's columns with ones that have been formatted or better readability.

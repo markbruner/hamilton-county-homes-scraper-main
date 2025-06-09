@@ -89,6 +89,8 @@ def tag_address(address):
     Tag the components of the address using the defined pattern.
     Returns a dictionary with the components tagged.
     """
+    if not isinstance(address, str) or not address.strip():
+        return {"st_num": None, "apt_num": None, "street": None}
     # List of spelled-out numbers to exclude from being tagged as 'NUM'
     spelled_out_numbers = {
         "zero", "one", "two", "three", "four", "five", "six", "seven", 
