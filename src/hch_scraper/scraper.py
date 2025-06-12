@@ -3,6 +3,7 @@ import random
 import pandas as pd
 import math
 import re
+import os
 
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
@@ -13,6 +14,12 @@ from hch_scraper.config.settings import XPATHS
 from hch_scraper.utils.data_extraction.form_helpers.selenium_utils import get_text
 from hch_scraper.utils.data_extraction.table_extraction import scrape_table_by_xpath, transform_table, find_click_row
 from hch_scraper.utils.io.navigation import safe_click, next_navigation
+from hch_scraper.utils.data_extraction.form_helpers.file_io import get_file_path
+
+def download_search_results_csv(wait):
+    """Click the download CSV link on the results page."""
+    safe_click(wait, XPATHS["results"]["download_csv"])
+    
 
 def _dt_num_pages(driver):
     """
@@ -127,6 +134,7 @@ def scrape_summary_pages(driver, wait):
     """
     Scrapes paginated search-results tables and returns a list of DataFrames.
     """
+
     # 1 Work out how many pages really exist
     num_pages = (_dt_num_pages(driver)
                  or _pagination_li_count(driver)
@@ -148,7 +156,8 @@ def scrape_summary_pages(driver, wait):
             break
 
         # advance to next page unless we're on the last one
-        if i + 1 < num_pages:
+        if i + 1 < num_pages:        
+            time.sleep(random.uniform(1, 4))
             if not next_navigation(driver, wait, XPATHS["results"]["next_page_button"]):
                 logger.warning("Next-page click failed early.  Stopping.")
                 break
@@ -182,6 +191,39 @@ def scrape_detail_pages(driver, wait, num_properties=10):
             break
 
     return appraisal_data
+
+def get_csv_data(wait):
+    # Download the search results CSV before iterating pages
+    try:
+        download_search_results_csv(wait)
+    except Exception as e:
+        logger.warning(f"Could not download search CSV: {e}")
+
+    download_path = get_file_path(".", 'raw', "search_results.csv")
+    for _ in range(30):
+        if os.path.exists(download_path) and os.path.getsize(download_path) > 0:
+            break
+        time.sleep(1)
+    else:
+            raise RuntimeError("CSV never downloaded")
+    
+    data = pd.read_csv(download_path)
+
+    try:
+        os.unlink(download_path)
+        logger.info(f"File '{download_path}' deleted successfully.")
+
+    
+    except FileNotFoundError:
+        print(f"File '{download_path}' not found.")
+    except PermissionError:
+        print(f"Permission denied to delete '{download_path}'.")
+    except IsADirectoryError:
+        print(f"'{download_path}' is a directory, not a file.")
+    except OSError as e:
+        print(f"Error deleting '{download_path}': {e}")
+    return data
+
 
 def scrape_data(driver, wait, num_properties_to_scrape):
     summary_data = scrape_summary_pages(driver, wait)

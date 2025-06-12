@@ -1,4 +1,5 @@
 import re
+import os
 import pandas as pd
 import numpy as np
 
@@ -13,6 +14,23 @@ from hch_scraper.utils.data_extraction.form_helpers.file_io import get_file_path
 
 nlp = spacy.load("en_core_web_sm")
 
+# Words that spaCy typically tags as numbers but should be treated as part
+# of the street name when parsing addresses.  This includes cardinal and
+# ordinal forms so that streets like "THIRTY-SECOND" are not mistaken for
+# house numbers.
+SPELLED_OUT_NUMBERS = {
+    # cardinal numbers
+    "zero", "one", "two", "three", "four", "five", "six", "seven", "eight",
+    "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen",
+    "sixteen", "seventeen", "eighteen", "nineteen", "twenty", "thirty",
+    "forty", "fifty", "sixty", "seventy", "eighty", "ninety",
+    # ordinal numbers
+    "first", "second", "third", "fourth", "fifth", "sixth", "seventh",
+    "eighth", "ninth", "tenth", "eleventh", "twelfth", "thirteenth",
+    "fourteenth", "fifteenth", "sixteenth", "seventeenth", "eighteenth",
+    "nineteenth", "twentieth", "thirtieth", "fortieth", "fiftieth",
+    "sixtieth", "seventieth", "eightieth", "ninetieth",
+}
 
 def _zip_for_row(address: str, grouped: pd.core.groupby.generic.DataFrameGroupBy, gold) -> str:
     """Return the ZIP code for a raw address string using centerline ranges."""
@@ -58,7 +76,7 @@ def add_zip_code(df: pd.DataFrame,
     """
     # --- load & prepare centerline reference ------------------------
     center = pd.read_csv(centerline_path, low_memory=False)
-    for col in ["STRLABEL", "L_F_ADD", "L_T_ADD", "R_F_ADD",
+    for col in ["NAME", "L_F_ADD", "L_T_ADD", "R_F_ADD",
                 "R_T_ADD", "ZIPL", "ZIPR", "zip_code", "city"]:
         if col not in center.columns:
             raise ValueError(f"Centerline CSV missing expected column '{col}'")
@@ -84,37 +102,64 @@ def correct_street_name_fuzzy(street_name, valid_names, cutoff=0.8):
     matches = difflib.get_close_matches(street_name, valid_names, n=1, cutoff=cutoff)
     return matches[0] if matches else street_name
 
-def tag_address(address):
-    """
-    Tag the components of the address using the defined pattern.
-    Returns a dictionary with the components tagged.
+def tag_address(address: str) -> dict:
+    """Parse an address string into components.
+
+    This helper attempts to extract a house number, an optional apartment
+    identifier and the street name.  Tokens that spaCy marks as ``NUM`` but
+    appear in ``SPELLED_OUT_NUMBERS`` are treated as normal words so that
+    streets like "THIRTY-SECOND" are handled correctly.
     """
     if not isinstance(address, str) or not address.strip():
         return {"st_num": None, "apt_num": None, "street": None}
+    
     # List of spelled-out numbers to exclude from being tagged as 'NUM'
-    spelled_out_numbers = {
-        "zero", "one", "two", "three", "four", "five", "six", "seven", 
-        "eight", "nine", "ten", "eleven", "twelve", "thirteen", 
-        "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", 
-        "nineteen", "twenty"
-    }    
-    # Initialize the spaCy model and Matcher
-    doc = nlp(address)
-    tagged_components = {"st_num": None, "apt_num": None, "street": None}
+    # spelled_out_numbers = {
+    #     "zero", "one", "two", "three", "four", "five", "six", "seven", 
+    #     "eight", "nine", "ten", "eleven", "twelve", "thirteen", 
+    #     "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", 
+    #     "nineteen", "twenty"
+    # }    
+    # # Initialize the spaCy model and Matcher
+    # doc = nlp(address)
+    # tagged_components = {"st_num": None, "apt_num": None, "street": None}
 
-    # Loop through the tokens to find matches based on conditions
-    for i, token in enumerate(doc):
-        if i == 0 and token.pos_ == "NUM" and token.text.lower() not in spelled_out_numbers:
-            tagged_components["st_num"] = token.text
-        elif i == 1 and is_alphanumeric(token) and token.text.lower() not in spelled_out_numbers:
-            tagged_components["apt_num"] = token.text
-        elif i == 1 and token.pos_=="NUM"and token.text.lower() not in spelled_out_numbers:
-            tagged_components["apt_num"] = token.text
-        elif i > 0:
-            # Concatenate the remaining tokens as the street name
-            tagged_components["street"] = " ".join([tok.text for tok in doc[i:]])
-            break
-    return tagged_components
+    # # Loop through the tokens to find matches based on conditions
+    # for i, token in enumerate(doc):
+    #     if i == 0 and token.pos_ == "NUM" and token.text.lower() not in spelled_out_numbers:
+    #         tagged_components["st_num"] = token.text
+    #     elif i == 1 and is_alphanumeric(token) and token.text.lower() not in spelled_out_numbers:
+    #         tagged_components["apt_num"] = token.text
+    #     elif i == 1 and token.pos_=="NUM"and token.text.lower() not in spelled_out_numbers:
+    #         tagged_components["apt_num"] = token.text
+    #     elif i > 0:
+    #         # Concatenate the remaining tokens as the street name
+    #         tagged_components["street"] = " ".join([tok.text for tok in doc[i:]])
+    #         break
+    # return tagged_components
+
+    doc = list(nlp(address))
+    tagged = {"st_num": None, "apt_num": None, "street": None}
+
+    start_idx = 0
+
+    if doc and doc[0].pos_ == "NUM" and doc[0].text.lower() not in SPELLED_OUT_NUMBERS:
+        tagged["st_num"] = doc[0].text
+        start_idx = 1
+
+    if len(doc) > start_idx:
+        tok = doc[start_idx]
+        if is_alphanumeric(tok) and tok.text.lower() not in SPELLED_OUT_NUMBERS:
+            tagged["apt_num"] = tok.text
+            start_idx += 1
+        elif tok.pos_ == "NUM" and tok.text.lower() not in SPELLED_OUT_NUMBERS:
+            tagged["apt_num"] = tok.text
+            start_idx += 1
+
+    if len(doc) > start_idx:
+        tagged["street"] = " ".join(t.text for t in doc[start_idx:])
+
+    return tagged
 
 # ------------------------------------------------------------------
 #  ADDRESS ENRICHER – one-time loader you can reuse in callbacks etc.
@@ -144,13 +189,13 @@ class AddressEnricher:
         # 4. Merge (no duplicates in centerlines)
         center = center.merge(zip_map, on="zip_code", how="left")
 
-        needed = ["STRLABEL", "L_F_ADD", "L_T_ADD",
+        needed = ["NAME", "L_F_ADD", "L_T_ADD",
                   "R_F_ADD", "R_T_ADD", "ZIPL", "ZIPR", "zip_code", "city"]
         missing = [c for c in needed if c not in center.columns]
         if missing:
             raise ValueError(f"Centerline CSV missing {missing}")
 
-        center["CANON"] = center["STRLABEL"]
+        center["CANON"] = center["NAME"]
         self._grouped  = center.groupby("CANON")
         self._gold     = center["CANON"].unique()
         self._score_cut = score_cut
@@ -181,8 +226,8 @@ class AddressEnricher:
         hnum = int(tags["st_num"]) if tags["st_num"] else None
         zip_code = None
         city = None
+        segs = self._grouped.get_group(canon_street)
         if hnum is not None:
-            segs = self._grouped.get_group(canon_street)
             seg = segs.loc[
                 ((segs.L_F_ADD <= hnum) & (hnum <= segs.L_T_ADD)) |
                 ((segs.R_F_ADD <= hnum) & (hnum <= segs.R_T_ADD))
@@ -194,6 +239,15 @@ class AddressEnricher:
                     zip_code = seg.ZIPL if seg.L_F_ADD % 2 == 0 else seg.ZIPR
                 else:
                     zip_code = seg.ZIPR if seg.R_F_ADD % 2 == 1 else seg.ZIPL
+        else:
+            # When no house number is provided, fall back to any unique
+            # city/ZIP listed for the street in the centerlines dataset.
+            cities = segs.city.dropna().unique()
+            if len(cities) == 1:
+                city = cities[0]
+            zips = pd.concat([segs.ZIPL, segs.ZIPR]).dropna().unique()
+            if len(zips) == 1:
+                zip_code = zips[0]
 
         return {
             **tags,
@@ -205,4 +259,12 @@ class AddressEnricher:
 
 
 # instantiate once so every downstream module can import & reuse it
-address_enricher = AddressEnricher()
+# address_enricher = AddressEnricher()
+
+if os.environ.get("HCH_SCRAPER_SKIP_ENRICHER"):
+    address_enricher = None
+else:
+    try:
+        address_enricher = AddressEnricher()
+    except Exception:
+        address_enricher = None

@@ -45,13 +45,15 @@ def format_column_name(name, to_lower=True, strip_underscores=False, prefix=None
     return name
 
 
-def final_csv_conversion(all_data_df, appraisal_data_df, dates, start_date, end_date, year):
+# def final_csv_conversion(all_data_df, appraisal_data_df, dates, start_date, end_date, year):
+
+def final_csv_conversion(all_data_df, dates, start_date, end_date, year):
     """
     Processes and saves home data to CSV files with additional cleaning and address concatenation.
     """
-    if appraisal_data_df.empty:
-        logger.warning("Appraisal data is empty. Exiting function.")
-        return None
+    # if appraisal_data_df.empty:
+    #     logger.warning("Appraisal data is empty. Exiting function.")
+    #     return None
 
     # Validate dates
     if not isinstance(dates, list) or not all(isinstance(d, tuple) and len(d) == 2 for d in dates):
@@ -60,7 +62,8 @@ def final_csv_conversion(all_data_df, appraisal_data_df, dates, start_date, end_
 
     # Merge and process data
 
-    final_df = all_data_df.merge(appraisal_data_df, left_on="Parcel Number", right_on="parcel_id", how="left")
+    # final_df = all_data_df.merge(appraisal_data_df, left_on="Parcel Number", right_on="parcel_id", how="left")
+    final_df = all_data_df
     logger.info(f'These are the dates in the list: {dates}')
 
     logger.info(f"Beginning cleaning and formatting data of {final_df.shape[0]} rows.")
@@ -82,19 +85,18 @@ def final_csv_conversion(all_data_df, appraisal_data_df, dates, start_date, end_
         enrich = enricher.enrich(addr)        # st_num, street_corrected, postal_code
         enrich["parcel_number"] = parcel
         parsed_rows.append(enrich)
-    print(parsed_rows)
+
     address_df = pd.DataFrame(parsed_rows).drop_duplicates()
     logger.debug(address_df.head())
 
     final_df = final_df.merge(address_df, on="parcel_number", how="left")
-    print(final_df)
-    final_df.loc[:,"new_address"] = (
-        final_df["st_num"] + " " +
-        final_df["street_corrected"].fillna(final_df["street"]).str.title() + ", " +
-        final_df["city"] + ", " +
-        final_df["state"] + " " +
-        final_df["postal_code"]
-        ).str.replace(r"\s+", " ", regex=True).str.strip(", ")
+    final_df.loc[:, "new_address"] = (
+        final_df["st_num"].fillna("").astype(str).str.strip() + " " +
+        final_df["street_corrected"].fillna(final_df["street"]).str.title().fillna("") + ", " +
+        final_df["city"].fillna("") + ", " +
+        final_df["state"].fillna("") + " " +
+        final_df["postal_code"].fillna("").astype(str)
+        ).str.replace(r"\s+", " ", regex=True).str.strip(", ").str.strip()
 
     logger.debug(final_df["street_corrected"])
     logger.debug(final_df['new_address'])

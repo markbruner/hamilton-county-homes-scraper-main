@@ -1,5 +1,6 @@
 import subprocess
 import sys
+from datetime import datetime
 
 import time
 import pandas as pd
@@ -8,7 +9,7 @@ import hch_scraper.utils.logging_setup
 from hch_scraper.utils.logging_setup import logger
 from hch_scraper.config.settings import URLS
 from hch_scraper.driver_setup import init_driver
-from hch_scraper.scraper import scrape_data
+from hch_scraper.scraper import scrape_data, get_csv_data
 
 from hch_scraper.utils.io.navigation import initialize_search, check_allowed_webscraping
 
@@ -16,28 +17,35 @@ from hch_scraper.utils.data_extraction.form_helpers.selenium_utils import safe_q
 from hch_scraper.utils.data_extraction.form_helpers.data_formatting import final_csv_conversion
 from hch_scraper.utils.data_extraction.form_helpers.datetime_utils import check_reset_needed
 
-
+def _ask_date(prompt: str) -> str:
+    """
+    Prompt the user until they enter a date in MM/DD/YYYY format.
+    Returns the valid date string.
+    """
+    while True:
+        s = input(f"{prompt} (MM/DD/YYYY): ")
+        try:
+            # this will raise ValueError if the format is wrong
+            dt = datetime.strptime(s, "%m/%d/%Y")
+            return dt # or return dt if you want a datetime object
+        except ValueError:
+            print("  ↳ Invalid date format. Please use MM/DD/YYYY.")
 
 def get_user_input():
-    # sale_price_low = int(input("What is the lowest price? "))
-    # sale_price_high = int(input("What is the highest price? "))
-    # finished_sq_ft_low = int(input("What is the lowest square feet? "))
-    # finished_sq_ft_high = int(input("What is the highest square feet? "))
-    # bedrooms_low = int(input("What is the lowest number of bedrooms? "))
+    # ask the dates first
+    start_date = _ask_date("Enter the start date")
+    end_date   = _ask_date("Enter the end date")
+    
+    start_year = start_date.year
+    end_year = end_date.year
 
-    # query_ids = ["sale_price_low", "sale_price_high", "finished_sq_ft_low", "finished_sq_ft_high", "bedrooms_low"]
-    # query_values = [sale_price_low, sale_price_high, finished_sq_ft_low, finished_sq_ft_high, bedrooms_low]
-
-    start_year = int(input("What year do you want to start the search? "))
-    end_year = int(input("What year do you want to end the search? "))
-
-    # return query_ids, query_values, range(start_year, end_year + 1)
-    return range(start_year, end_year + 1)
+    years = range(start_year, end_year + 1)
+    return start_date, end_date, years
 
 # def run_scraper_for_year(year, allowed, query_ids, query_values):
-def run_scraper_for_year(year, allowed):
-    start_date = f"01/01/{year}"
-    end_date = f"12/31/{year}"
+def run_scraper_for_year(start_date, end_date, year, allowed):
+    start_date = f"{start_date}"
+    end_date = f"{end_date}"
     dates = [(start_date, end_date)]
 
     while dates:
@@ -45,9 +53,10 @@ def run_scraper_for_year(year, allowed):
             logger.info(f"Starting scraping process for start date, {start_date}, and end date, {end_date}")
 
             all_data_df = pd.DataFrame()
-            appraisal_data_df = pd.DataFrame()
+            # appraisal_data_df = pd.DataFrame()
 
-            all_data, appraisal_data, dates, driver, modified = main(
+            # all_data, appraisal_data, dates, driver, modified = main(
+            all_data, dates, driver, modified = main(
                 allowed=allowed,
                 start=start_date,
                 end=end_date,
@@ -60,10 +69,12 @@ def run_scraper_for_year(year, allowed):
                 break
 
             all_data_df = pd.concat([all_data_df, all_data], axis=0, ignore_index=True)
-            appraisal_data_df = pd.concat([appraisal_data_df, appraisal_data], axis=0, ignore_index=True)
-
+            # appraisal_data_df = pd.concat([appraisal_data_df, appraisal_data], axis=0, ignore_index=True)
+            # final_csv_conversion(
+            #     all_data_df, appraisal_data_df, dates, start_date, end_date, year
+            #     )
             final_csv_conversion(
-                all_data_df, appraisal_data_df, dates, start_date, end_date, year
+                all_data_df, dates, start_date, end_date, year
                 )
 
 # def main(allowed, start, end, dates, ids, values): 
@@ -83,25 +94,28 @@ def main(allowed, start, end, dates):
 
         if reset_needed:
             logger.info("Reset needed, closing WebDriver.")
-            return pd.DataFrame(), pd.DataFrame(), dates, driver, modified
+            # return pd.DataFrame(), pd.DataFrame(), dates, driver, modified
+            return pd.DataFrame(), dates, driver, modified
         
         # Scrape data
-        data = scrape_data(driver, wait, num_properties_to_scrape )  
-        all_data = data['summary']
-        appraisal_data = data['details']
+        # data = scrape_data(driver, wait, num_properties_to_scrape )  
+        data = get_csv_data(wait)
+        all_data = data
+        # appraisal_data = data['details']
 
         assert all_data, "No all_data returned!"
-        assert appraisal_data, "No appraisal_data returned!"            
+        # assert appraisal_data, "No appraisal_data returned!"            
         # Consolidate data
         all_data_df = pd.concat(all_data).reset_index(drop=True)
         all_data_df.columns = ['Parcel Number', 'Address', 'BBB', 'FinSqFt', 'Use', 'Year Built','Transfer Date', 'Amount']
-        appraisal_data_df = pd.concat(appraisal_data).reset_index(drop=True)
+        # appraisal_data_df = pd.concat(appraisal_data).reset_index(drop=True)
 
         logger.info(
             f"Completed scraping for {start}–{end}: "
             f"{all_data_df.shape[0]} rows (ZIP enriched)."
         )
-        return all_data_df, appraisal_data_df, dates, driver, modified
+        # return all_data_df, appraisal_data_df, dates, driver, modified
+        return all_data_df, dates, driver, modified
     
     finally:
         safe_quit(driver)
@@ -110,13 +124,10 @@ def main(allowed, start, end, dates):
 
 allowed = False
 if __name__ == "__main__":
-
-    # query_ids, query_values, years = get_user_input()
-    years = get_user_input()
+    start_date, end_date, years = get_user_input()
     allowed = False
 
     # Main loop to process each year
     for year in years:
         logger.info(f"Starting scraping process for year {year}")
-        # run_scraper_for_year(year, allowed, query_ids, query_values)
-        run_scraper_for_year(year, allowed)
+        run_scraper_for_year(start_date, end_date, year, allowed)
