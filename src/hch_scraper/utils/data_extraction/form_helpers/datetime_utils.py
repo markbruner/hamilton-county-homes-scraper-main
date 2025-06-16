@@ -1,95 +1,73 @@
 import re
 import pandas as pd
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, date
+from typing import List, Tuple, Any, Union
+from dataclasses import dataclass
 
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 
-import hch_scraper.utils.logging_setup 
 from hch_scraper.utils.logging_setup import logger
 from hch_scraper.config.settings import XPATHS
 from hch_scraper.utils.data_extraction.form_helpers.selenium_utils import get_text, safe_quit
 
-# datetime_utils.py  (new code – place after imports)
-def _get_dt_record_count(driver):
+@dataclass
+class ModifiedDates:
+    updated_dates: List[Tuple[datetime, datetime]]
+    modified: bool
+
+@dataclass
+class CheckReset:
+    reset_needed: bool
+    modified: bool
+    dates: List[Tuple[datetime, datetime]]
+    total_entries: int
+
+def update_date_range_and_append(
+    dates: List[Tuple[datetime, datetime]],
+    old_date: datetime,
+    new_date: datetime,
+    additional_slice: Tuple[datetime, datetime]
+) -> ModifiedDates:
     """
-    Return the total row count reported by DataTables, or None if
-    jQuery/DataTables isn’t present yet.
-    """
-    try:
-        return driver.execute_script("""
-            const $ = window.jQuery;
-            if (!$ || !$.fn.dataTable) return null;
+    Replaces a specific end date in a date range with a new date and adds a new time slice immediately after it.
 
-            // Adjust '#resultsTable' if your table uses a different id
-            const table = $('#resultsTable').DataTable();
-            return table ? table.page.info().recordsDisplay : null;
-        """)
-    except Exception:
-        return None
-
-
-def safe_to_datetime(date, description="date"):
-    try:
-        return pd.to_datetime(date)
-    except Exception as e:
-        logger.error(f"Invalid {description}: {date}. Error: {e}")
-        raise
-
-def str_format_date(date):
-    """
-    Converts a datetime object into a string in the format MM/DD/YYYY.
-
-    Parameters:
-    - date (datetime): The datetime object to format.
+    Args:
+        dates (List[Tuple[datetime, datetime]]): A list of date ranges as (start, end) tuples.
+        old_date (datetime): The end date to replace in one of the tuples.
+        new_date (datetime): The new end date to use as a replacement.
+        additional_slice (Tuple[datetime, datetime]): A new date range to insert after the modified one.
 
     Returns:
-    - str: The formatted date string.
-    
+        ModifiedDates: A dataclass containing the updated list of date ranges and a boolean indicating whether a change was made.
+
     Raises:
-    - ValueError: If the input is not a valid datetime object.
-    """
-    if not isinstance(date, datetime):
-        raise ValueError(f"Input must be a datetime object, but got {type(date).__name__}.")
-    
-    return f"{date:%m/%d/%Y}"
-
-def split_replace_add_time_slice(dates, old_date, new_date, additional_slice):
-    """
-    Replaces a specific end date in a date range and adds a new time slice after it.
-
-    Parameters:
-    - dates (list of tuples): List of date ranges as (start, end) tuples.
-    - old_date (str): The end date to replace.
-    - new_date (str): The new end date to replace `old_date` with.
-    - additional_slice (tuple): A new time slice to add after the modified date range.
-
-    Returns:
-    - list of tuples: The modified list of date ranges.
+        ValueError: If `dates` is not a list of (start, end) tuples.
+        ValueError: If `additional_slice` is not a (start, end) tuple.
     """
     # Validate inputs
     if not isinstance(dates, list) or not all(isinstance(d, tuple) and len(d) == 2 for d in dates):
         logger.error(f"Dates must be a list of tuples with start and end dates. The dates in the list are: {dates}")
-        raise ValueError("Invalid dates format")
+        raise ValueError("Dates must be a list of tuples with start and end dates.")
     if not isinstance(additional_slice, tuple) or len(additional_slice) != 2:
         logger.error("Additional slice must be a tuple with two elements (start, end).")
         raise ValueError("Invalid additional slice format")
     
-    old_date = safe_to_datetime(old_date,"old date")
-    new_date = safe_to_datetime(new_date, "new date")
+    old_date = _ensure_datetime(old_date,"old date")
+    new_date = _ensure_datetime(new_date, "new date")
 
     updated_dates = dates.copy()
     modified = False
 
     # Iterate through the date ranges to find and replace old_date
     for i, (start, end) in enumerate(updated_dates):
-        start = safe_to_datetime(start, "start date")
-        end = safe_to_datetime(end, "end date")
+        start = _ensure_datetime(start, "start date")
+        end = _ensure_datetime(end, "end date")
 
         if end == old_date:
             # Replace the end date with the new date
-            start = str_format_date(start)
-            new_date = str_format_date(new_date)
+            start = _format_date_string(start)
+            new_date = _format_date_string(new_date)
             updated_dates[i] = (start, new_date)
             # Insert the additional time slice
             updated_dates.insert(i + 1, additional_slice)
@@ -100,14 +78,27 @@ def split_replace_add_time_slice(dates, old_date, new_date, additional_slice):
     if not modified:
         logger.warning(f"Old date {old_date} not found in any date range. No modifications made.")
 
-    return updated_dates, modified
+    return ModifiedDates(
+        updated_dates=updated_dates,
+        modified=modified
+    )
 
+def _format_date_string(dt: Union[date, datetime]) -> str:
+    if not isinstance(dt, (datetime, date)):
+        raise ValueError(f"Expected a datetime or date object, got {type(dt).__name__}")
+    return dt.strftime("%m/%d/%Y")
 
-def check_reset_needed(driver, wait, start, end, dates):
+def check_reset_needed(
+    driver: object,
+    wait: object,
+    start: str,
+    end: str,
+    dates: List[Tuple[datetime, datetime]]
+) -> CheckReset:
     """
     Checks if the search needs to be reset due to 1000 entries and updates the time slice.
 
-    Parameters:
+    Args:
     - driver: Selenium WebDriver instance.
     - wait: WebDriverWait instance for handling explicit waits.
     - start (str): Start date of the current search range.
@@ -115,12 +106,13 @@ def check_reset_needed(driver, wait, start, end, dates):
     - dates (list): List of date ranges to modify if resetting is needed.
 
     Returns:
-    - reset_needed (bool): Whether the search was reset.
-    - updated_dates (list): Updated list of date ranges.
-    - total_entries (int): Number of entries in the current search.
+    - CheckReset: A dataclass containing if a reset is needed, if the list of dates as tuples were modified, the range of date tuples, and the number of search results.
+
+    Raises:
+    - ValueError: If 'total_entries' failed to be extracted.
     """
-    start_dt = safe_to_datetime(start, "start date")
-    end_dt = safe_to_datetime(end, "end date")
+    start_dt = _ensure_datetime(start, "start date")
+    end_dt = _ensure_datetime(end, "end date")
 
     try:
         # A) ask DataTables directly
@@ -154,23 +146,59 @@ def check_reset_needed(driver, wait, start, end, dates):
 
         # Calculating the midpoint of the start and end date
         midpoint = start_dt + (end_dt - start_dt) / 2
-        midpoint_str = f"{midpoint:%m/%d/%Y}"
 
         # Creating the new time slice
-        new_slice = (
-            f"{midpoint + timedelta(days=1):%m/%d/%Y}"
-            ,f"{end_dt:%m/%d/%Y}"
-            )
+        new_slice = (midpoint + timedelta(days=1), end_dt)
         
         # Updating the list of dates        
-        updated_dates, modified = split_replace_add_time_slice(
-            dates, f"{end_dt:%m/%d/%Y}", midpoint_str, new_slice
-            )
-        return True, modified, updated_dates, total_entries
+        updated_dates, modified = update_date_range_and_append(
+            dates,
+            end_dt,
+            midpoint,
+            new_slice
+        )
+        
+        return CheckReset(
+        reset_needed=True, 
+        modified=modified,
+        dates=updated_dates,
+        total_entries=total_entries
+        )
     
     if total_entries < 1:
         logger.warning(f"Search parameters between {start_dt} and {end_dt} yielded no results. Moving to next date range.")
         safe_quit(driver)
-        return False, False, dates, total_entries
 
-    return False, False, dates, total_entries
+    return CheckReset(
+    reset_needed=False, 
+    modified=False,
+    dates=dates,
+    total_entries=total_entries
+    )
+
+
+def _ensure_datetime(value: Any, description: str = "date") -> datetime:
+    if isinstance(value, datetime):
+        return value
+    try:
+        return pd.to_datetime(value)
+    except Exception as e:
+        logger.error(f"Invalid {description}: {value}. Error: {e}")
+        raise ValueError(f"Invalid {description}: {value}")
+
+def _get_dt_record_count(driver):
+    """
+    Return the total row count reported by DataTables, or None if
+    jQuery/DataTables isn’t present yet.
+    """
+    try:
+        return driver.execute_script("""
+            const $ = window.jQuery;
+            if (!$ || !$.fn.dataTable) return null;
+
+            // Adjust '#resultsTable' if your table uses a different id
+            const table = $('#resultsTable').DataTable();
+            return table ? table.page.info().recordsDisplay : null;
+        """)
+    except Exception:
+        return None

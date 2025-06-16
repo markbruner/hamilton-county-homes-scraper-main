@@ -16,60 +16,11 @@ from hch_scraper.utils.data_extraction.table_extraction import scrape_table_by_x
 from hch_scraper.utils.io.navigation import safe_click, next_navigation
 from hch_scraper.utils.data_extraction.form_helpers.file_io import get_file_path
 
-def download_search_results_csv(wait):
+def download_search_results_csv(wait) -> str:
     """Click the download CSV link on the results page."""
     safe_click(wait, XPATHS["results"]["download_csv"])
-    
 
-def _dt_num_pages(driver):
-    """
-    Ask DataTables directly.  Returns an int or None.
-    """
-    try:
-        return driver.execute_script("""
-            const $ = window.jQuery;
-            if (!$ || !$.fn.dataTable) return null;
-            const dt = $('#resultsTable').DataTable();        // adjust selector!
-            return dt ? dt.page.info().pages : null;
-        """)
-    except Exception:
-        return None
-
-
-def _pagination_li_count(driver):
-    """
-    Count <li class="paginate_button"> elements in the pagination bar.
-    Works when Bootstrap pagination is used.
-    """
-    try:
-        lis = driver.find_elements(By.CSS_SELECTOR,
-                                   "ul.pagination li.paginate_button:not(.next):not(.previous)")
-        return len(lis) or None
-    except Exception:
-        return None
-
-
-def _pages_from_status_text(driver, wait):
-    """
-    Parse something like 'Showing 1 to 10 of 121 entries' → ceil(121/10) = 13.
-    """
-    try:
-        text = wait.until(
-            EC.presence_of_element_located(
-                (By.XPATH, XPATHS["results"]["search_results_number"])
-            )
-        ).text
-        # Pull the two numbers we need: '10' (rows per page) and '121' (total)
-        m = re.search(r"to\s+(\d+)\s+of\s+([\d,]+)", text)
-        if not m:
-            return None
-        rows_per_page = int(m.group(1).replace(",", ""))
-        total_rows    = int(m.group(2).replace(",", ""))
-        return math.ceil(total_rows / rows_per_page)
-    except Exception:
-        return None
-
-def extract_property_details(driver, wait):
+def extract_property_details(driver, wait) -> pd.DataFrame:
     """
     Extracts detailed property information, including appraisal, tax, and transfer data.
 
@@ -164,6 +115,53 @@ def scrape_summary_pages(driver, wait):
 
     return all_data
 
+def _dt_num_pages(driver) -> int:
+    """
+    Ask DataTables directly.  Returns an int or None.
+    """
+    try:
+        return driver.execute_script("""
+            const $ = window.jQuery;
+            if (!$ || !$.fn.dataTable) return null;
+            const dt = $('#resultsTable').DataTable();        // adjust selector!
+            return dt ? dt.page.info().pages : null;
+        """)
+    except Exception:
+        return None
+
+
+def _pagination_li_count(driver) -> int:
+    """
+    Count <li class="paginate_button"> elements in the pagination bar.
+    Works when Bootstrap pagination is used.
+    """
+    try:
+        lis = driver.find_elements(By.CSS_SELECTOR,
+                                   "ul.pagination li.paginate_button:not(.next):not(.previous)")
+        return len(lis) or None
+    except Exception:
+        return None
+
+def _pages_from_status_text(driver, wait) -> int:
+    """
+    Parse something like 'Showing 1 to 10 of 121 entries' → ceil(121/10) = 13.
+    """
+    try:
+        text = wait.until(
+            EC.presence_of_element_located(
+                (By.XPATH, XPATHS["results"]["search_results_number"])
+            )
+        ).text
+        # Pull the two numbers we need: '10' (rows per page) and '121' (total)
+        m = re.search(r"to\s+(\d+)\s+of\s+([\d,]+)", text)
+        if not m:
+            return None
+        rows_per_page = int(m.group(1).replace(",", ""))
+        total_rows    = int(m.group(2).replace(",", ""))
+        return math.ceil(total_rows / rows_per_page)
+    except Exception:
+        return None
+
 def scrape_detail_pages(driver, wait, num_properties=10):
     """
     Scrapes detailed property pages. Starts from the first property result and pages through.
@@ -193,35 +191,46 @@ def scrape_detail_pages(driver, wait, num_properties=10):
     return appraisal_data
 
 def get_csv_data(wait):
-    # Download the search results CSV before iterating pages
     try:
         download_search_results_csv(wait)
     except Exception as e:
         logger.warning(f"Could not download search CSV: {e}")
+        return pd.DataFrame()  # or raise
 
-    download_path = get_file_path(".", 'raw', "search_results.csv")
-    for _ in range(30):
-        if os.path.exists(download_path) and os.path.getsize(download_path) > 0:
-            break
-        time.sleep(1)
-    else:
-            raise RuntimeError("CSV never downloaded")
-    
-    data = pd.read_csv(download_path)
+    download_path = get_file_path(".", "raw", "search_results.csv")
+    # Wait for non-zero file
 
+    start = time.time()
+    while True:
+        if os.path.exists(download_path):
+            size = os.path.getsize(download_path)
+            if size > 0:
+                time.sleep(1)  # short pause for write completion
+                break
+        if time.time() - start > 30:
+            logger.error(f"CSV download timed out or empty: {download_path}")
+            return pd.DataFrame()  # or raise
+        time.sleep(0.5)
+
+    # Now read
+    try:
+        data = pd.read_csv(download_path)
+    except Exception as e:
+        logger.error(f"Error reading CSV: {e}")
+        # Optionally keep the file for inspection:
+        # return pd.DataFrame()
+        raise
+
+    if data.empty:
+        logger.warning(f"Downloaded CSV is empty (0 rows): {download_path}")
+        # Optionally: save the file to a “failed” folder before deletion for debugging
+    # Delete the file now
     try:
         os.unlink(download_path)
         logger.info(f"File '{download_path}' deleted successfully.")
+    except Exception as e:
+        logger.warning(f"Error deleting '{download_path}': {e}")
 
-    
-    except FileNotFoundError:
-        print(f"File '{download_path}' not found.")
-    except PermissionError:
-        print(f"Permission denied to delete '{download_path}'.")
-    except IsADirectoryError:
-        print(f"'{download_path}' is a directory, not a file.")
-    except OSError as e:
-        print(f"Error deleting '{download_path}': {e}")
     return data
 
 
