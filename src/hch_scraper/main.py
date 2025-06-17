@@ -1,3 +1,21 @@
+"""
+Main scraping pipeline for Hamilton County Auditor data.
+
+This script allows a user to scrape parcel data from the Hamilton County Auditor’s website
+over a specified date range. It handles date input, WebDriver setup, site navigation, data extraction,
+and CSV output, including logic to manage pagination and robot.txt checks.
+
+Modules:
+    - logging_setup: Handles logging configuration.
+    - settings: Contains constants such as URLs.
+    - driver_setup: Initializes the Selenium WebDriver.
+    - scraper: Retrieves tabular data from the results.
+    - form_helpers: Handles web form interaction, formatting, and retry logic.
+
+To run:
+    $ python -m src.hch_scraper.main
+"""
+
 import time
 import pandas as pd
 from datetime import datetime, date
@@ -18,7 +36,7 @@ class Dates:
     """
     Represents the user input date range.
 
-    Attributes:
+    Args:
         start_date (date): The user-specified start date.
         end_date (date): The user-specified end date.
         years (range): A range of years from start_date to end_date inclusive.
@@ -32,7 +50,7 @@ class ScraperResult:
     """
     Represents the output from scraping a single year.
 
-    Attributes:
+    Args:
         data (pd.DataFrame): Combined scraped data.
         remaining_ranges (List[Tuple[str, str]]): Remaining ranges after scraping.
         final_start (str): Final formatted start date.
@@ -50,7 +68,7 @@ class ScrapeRequest:
     """
     Represents a single scrape request input.
 
-    Attributes:
+    Args:
         start (str): Start date in MM/DD/YYYY format.
         end (str): End date in MM/DD/YYYY format.
         ranges (List[Tuple[str, str]]): The list of date ranges to scrape.
@@ -58,6 +76,18 @@ class ScrapeRequest:
     start: str
     end: str
     ranges: List[Tuple[str, str]]
+
+def get_user_input() -> Dates:
+    """
+    Prompts the user to enter a start and end date, and constructs a date range between them.
+
+    Returns:
+        Dates: A dataclass containing start date, end date, and the range of years.
+    """
+    start_date = _ask_date("Enter the start date")
+    end_date = _ask_date("Enter the end date")
+    years = range(start_date.year, end_date.year + 1)
+    return Dates(start_date, end_date, years)
 
 def _ask_date(prompt: str) -> date:
     """
@@ -76,18 +106,6 @@ def _ask_date(prompt: str) -> date:
             return dt.date()
         except ValueError:
             print("↳ Invalid date format. Please use MM/DD/YYYY.")
-
-def get_user_input() -> Dates:
-    """
-    Prompts the user to enter a start and end date, and constructs a date range between them.
-
-    Returns:
-        Dates: A dataclass containing start date, end date, and the range of years.
-    """
-    start_date = _ask_date("Enter the start date")
-    end_date = _ask_date("Enter the end date")
-    years = range(start_date.year, end_date.year + 1)
-    return Dates(start_date, end_date, years)
 
 def run_scraper_pipeline():
     """
@@ -214,13 +232,11 @@ def main(robots_txt_allowed: bool, request: ScrapeRequest) -> Tuple[pd.DataFrame
             return pd.DataFrame(), check.dates, driver, check.modified
 
         data = get_csv_data(wait)
-        all_data_df = pd.DataFrame()
-        all_data_df = pd.concat([all_data_df, data], axis=0).reset_index(drop=True)
 
         logger.info(
-            f"Completed scraping for {request.start}–{request.end}: {all_data_df.shape[0]} rows."
+            f"Completed scraping for {request.start}–{request.end}: {data.shape[0]} rows."
         )
-        return all_data_df, check.dates, driver, check.modified
+        return data, check.dates, driver, check.modified
 
     finally:
         safe_quit(driver)
