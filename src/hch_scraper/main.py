@@ -233,6 +233,7 @@ def main(robots_txt_allowed: bool, request: ScrapeRequest) -> Tuple[pd.DataFrame
 
         data = get_csv_data(wait)
 
+        
         logger.info(
             f"Completed scraping for {request.start}–{request.end}: {data.shape[0]} rows."
         )

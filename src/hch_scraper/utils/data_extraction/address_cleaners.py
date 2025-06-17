@@ -67,7 +67,7 @@ def parse_house_number(st_num_str):
 
 def add_zip_code(df: pd.DataFrame,
                  centerline_path: str = get_file_path(".", 'raw', "Countywide_Street_Centerlines.csv"),
-                 address_col: str = "Address") -> pd.DataFrame:
+                 address_col: str = "address") -> pd.DataFrame:
     """
     Adds ZIP code information to a DataFrame based on address matching with centerline data.
 

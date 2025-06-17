@@ -39,6 +39,6 @@ property:
 view:
   property_summary: '//*[@id="parcel-tabs"]/a[1]'
   appraisal_information: '//*[@id="property_overview_wrapper"]/table[1]'
-  tax_distributions_page: '//*[@id="tax-credit-value-summary"]'
+  tax_summary: '//*[@id="tax-credit-value-summary"]'
   transfer_tab: '//*[@id="parcel-tabs"]/a[4]'
   transfer_table: '/html/body/div/div[3]/div[2]/table'
