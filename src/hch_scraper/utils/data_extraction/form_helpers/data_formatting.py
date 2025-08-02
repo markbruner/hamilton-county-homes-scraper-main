@@ -51,10 +51,8 @@ def format_column_name(
 
 def final_csv_conversion(
     all_data_df: pd.DataFrame,
-    dates : List[Tuple],
     start_date : str,
     end_date : str,
-    year : int
 ) -> Dict[pd.DataFrame,pd.DataFrame]:
     """
     Cleans and saves home sales data to CSV files.
@@ -64,35 +62,27 @@ def final_csv_conversion(
 
     Args:
         all_data_df (pd.DataFrame): The raw DataFrame to clean and save.
-        dates (List[Tuple[str, str]]): List of all scraping date ranges.
         start_date (str): Start date of the current range.
         end_date (str): End date of the current range.
-        year (int): The current scraping year.
 
     Raises:
         ValueError: If `dates` is not a list of (start, end) tuples.
     """
-    # Validate dates
-    if not isinstance(dates, list) or not all(isinstance(d, tuple) and len(d) == 2 for d in dates):
-        logger.error("Dates must be a list of tuples with start and end dates.")
-        raise ValueError("Invalid dates format")
-
     # Merge and process data
-    final_df = all_data_df
-    logger.info(f'These are the dates in the list: {dates}')
+    df = all_data_df
 
-    logger.info(f"Beginning cleaning and formatting data of {final_df.shape[0]} rows.")
-    final_df = clean_and_format_columns(final_df, ["last_transfer_date", "last_sale_amount", "parcel_id"])
+    logger.info(f"Beginning cleaning and formatting data of {df.shape[0]} rows.")
+    df = clean_and_format_columns(df, ["last_transfer_date", "last_sale_amount", "parcel_id"])
     
-    final_df = final_df.drop_duplicates()
-    logger.info(f'Removing these dates: {start_date} and {end_date}')
-    dates.remove((start_date, end_date))
+    df = df.drop_duplicates()
+    start_date_clean = start_date.replace("/",'')
+    end_date_clean = end_date.replace("/",'')
 
     # Save CSV files
-    homes_csv_path = get_file_path(".", "raw/home_sales", f"homes_{year}.csv")
+    homes_csv_path = get_file_path(".", "raw/home_sales", f"homes_{start_date_clean}_{end_date_clean}.csv")
     all_homes_csv_path = get_file_path(".", "raw/home_sales", "homes_all.csv")
-    save_to_csv(final_df, homes_csv_path)
-    save_to_csv(final_df, all_homes_csv_path)
+    save_to_csv(df, homes_csv_path)
+    save_to_csv(df, all_homes_csv_path)
     
 def clean_and_format_columns(df: pd.DataFrame, drop_cols: List[str]) -> pd.DataFrame:
     """

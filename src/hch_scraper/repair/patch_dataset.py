@@ -57,11 +57,11 @@ from hch_scraper.utils.data_extraction.form_helpers.file_io import get_file_path
 # -----------------------------------------------------------------------------
 
 # Base directory is two levels up from this file
-BASE_DIR = Path(__file__).resolve().parents[2]
+BASE_DIR = Path(__file__).resolve().parents[3]
 
 # Paths to the raw homes and polygon CSVs
-homes_path = get_file_path(BASE_DIR, "raw", "All Homes.csv")
-polygon_csv_path = get_file_path(BASE_DIR, "raw/downloads", "Hamilton_County_Parcel_Polygons.csv")
+homes_path = get_file_path(BASE_DIR, "raw/home_sales", "homes_01012003_12312003.csv")
+zipcode_path=get_file_path(BASE_DIR, 'raw/downloads', "Countywide_Zip_Codes.csv")
 polygon_geojson_path = get_file_path(BASE_DIR, "raw/downloads", "Hamilton_County_Parcel_Polygons.geojson")
 
 # Base URL for the auditor’s site
@@ -77,16 +77,18 @@ if __name__ == "__main__":
 
     # 2. Read in existing CSV of all homes and polygons
     homes = pd.read_csv(homes_path)
+    homes['parcel_number'] = homes['parcel_number'].str.replace('-','').str.strip()
+    zipcodes = pd.read_csv(zipcode_path)
 
     polygons = gpd.read_file(polygon_geojson_path)
-    polygons = polygons.to_crs(epsg=3857)
-
-    # Compute centroids
+    polygons = polygons.to_crs(epsg=3735) 
     polygons["centroid"] = polygons.geometry.centroid
+    polygons["geometry"] = polygons.geometry
+    # Compute centroids
+    centroids_ll = polygons.set_geometry("centroid").to_crs(epsg=4326)
+    polygons["lon"] = centroids_ll.geometry.x
+    polygons["lat"] = centroids_ll.geometry.y
 
-    # Split into X/Y columns if you like
-    polygons["lon"] = polygons.centroid.x
-    polygons["lat"] = polygons.centroid.y
 
     keep_cols = [
         "AUDPTYID",        # parcel key (will rename to parcel_number)
@@ -101,13 +103,18 @@ if __name__ == "__main__":
         "FRONT_FOOTAGE",   # frontage length
         "SHAPEAREA",       # parcel area
         "SHAPELEN",        # parcel perimeter/length
+        "geometry",
+        "centroid",
+        "lon",
+        "lat",
     ]
 
     polygons = polygons[keep_cols].rename(columns={"AUDPTYID":'parcel_number'})
+    polygons['parcel_number'] = polygons['parcel_number'].astype('str').str.strip()
     merged = homes.merge(polygons, on="parcel_number", how="left")
 
     # Storing the merged columns in order to remove the columns created from geocoding longitude and latitude.
-    final_cols = merged.columns
+    final_cols = merged.columns.to_list()
 
 
     logger.info("Beginning replacing of the street type (i.e. dr, rd, way, etc...) with the new mapping.")    
@@ -126,10 +133,16 @@ if __name__ == "__main__":
     ]
 
     address_df = pd.DataFrame.from_dict(address_parts)
-    address_df = address_df.drop_duplicates()
+    address_df = address_df.drop_duplicates().dropna()
     merged = merged.merge(address_df, on='parcel_number',how='left')
 
     merged = add_zip_code(merged)
+
+    merged['postal_code'] = merged['postal_code'].astype('str')
+    zipcodes['ZIPCODE'] = zipcodes['ZIPCODE'].astype('str')
+
+    merged = (merged.merge(zipcodes[['ZIPCODE','USPSCITY', 'state']], left_on='postal_code', right_on='ZIPCODE', how='left')
+              .rename(columns={'USPSCITY':'city'}))
 
     merged["new_address"] = (
         merged["st_num"]
@@ -141,10 +154,15 @@ if __name__ == "__main__":
         .str.replace(r"\s+", " ", regex=True)
         .str.strip()
     )
-    merged = geocode_until_complete(merged)
 
+    final_cols.append('city')    
+    final_cols.append('state')
+    final_cols.append('postal_code')
+    merged = merged[~merged['parcel_number'].isna()]
+
+    merged = geocode_until_complete(merged)
     merged = merged[final_cols]
-    
+
     # 3. Launch Selenium WebDriver and navigate to the parcel search screen
     driver, wait = init_driver(BASE_URL)
     safe_click(wait, XPATHS["search"]["property_search"])
@@ -157,31 +175,23 @@ if __name__ == "__main__":
 
     # 6. Loop over each parcel with missing data
     for missing_id, transfer_date in zip(missing_ids, missing_dates):
-        # a. Scrape the missing details for this parcel
+        # Scrape the missing details for this parcel
         property_info_table = patch_data(wait, driver, missing_id)
 
-        # b. Build a boolean mask for the exact row to update
+        # Build a boolean mask for the exact row to update
         mask = (
             (merged['parcel_number'] == missing_id) &
             (merged['transfer_date'] == transfer_date)
         )
 
-        # d. Ensure it’s a DataFrame (patch_data may return dict-like)
+        # Ensure it’s a DataFrame (patch_data may return dict-like)
         property_info_table = pd.DataFrame(property_info_table)
 
-        cols = property_info_table.columns
-
-        # f. Write each patched value back into the homes DataFrame
-        for col in cols:
-            # Cast homes column to string to avoid type mismatches
-            merged[col] = merged[col].astype(str)
-            merged.loc[mask, col] = property_info_table[col].values[0]
-
-        # g. Save the incrementally updated CSV
+        # Save the incrementally updated CSV
         merged.to_csv(output_path, index=False)
         logger.info(f"Patched parcel {missing_id} and saved to {output_path}")
 
-        # h. Randomized delay to reduce server load and avoid being blocked
+        # Randomized delay to reduce server load and avoid being blocked
         time.sleep(random.uniform(4, 8))
 
     # 7. Close the WebDriver when done

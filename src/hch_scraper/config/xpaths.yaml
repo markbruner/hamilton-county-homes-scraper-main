@@ -19,6 +19,7 @@ results:
   search_results_number: '//*[@id="search-results_info"]'
   number_pages: '//*[@id="search-results_paginate"]/span/a[6]'
   download_csv: '//*[@id="ajaxDiv"]/div/div[2]/div[2]/a[2]/span'
+  last_page: '//*[@id="search-results_paginate"]/span/a[6]'
   
   first_results_table_page: '//*[@id="search-results_paginate"]/span/a[1]'
   first_row_results_table: '//*[@id="search-results"]/tbody/tr[1]'

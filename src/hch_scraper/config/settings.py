@@ -23,6 +23,11 @@ URLS = {
     "geocoding_api": 'http://api.positionstack.com/v1/forward'
 }
 
+CACHE_PATHS = {
+    "geocoding_cache":"data/processed/geocode_cache.json",
+    "address_parts_cache":"data/processed/address_parts_cache.json"
+}
+
 # Retry and timeout settings, all in seconds
 SCRAPING_CONFIG = {
     "page_load_timeout": 30,
@@ -255,6 +260,28 @@ district_color_map = {
     'LOVELAND CSD':'rgba(175, 43, 191,1)',
     # Add more districts and colors as needed
 }
+
+direction_map = {
+    "SOUTH":"S", 
+    "NORTH":"N",
+    "EAST":"E",
+    "WEST":"W",
+    "NORTHEAST":"NE",
+    "SOUTHEAST":"SE",
+    "NORTHWEST":"NW",
+    "SOUTHWEST":"SW",
+    }
+
+direction_map_tl = {
+    "S":"SOUTH", 
+    "N":"NORTH",
+    "E":"EAST",
+    "W":"WEST",
+    "NE":"NORTHEAST",
+    "SE":"SOUTHEAST",
+    "NW":"NORTHWEST",
+    "SW":"SOUTHWEST",
+    }
 
 CLUSTER_MIN_SIZE = 5
 CLUSTER_MIN_SAMPLES = 1

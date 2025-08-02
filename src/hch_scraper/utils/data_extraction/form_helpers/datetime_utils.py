@@ -6,10 +6,12 @@ from dataclasses import dataclass
 
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
+import time
 
 from hch_scraper.utils.logging_setup import logger
 from hch_scraper.config.settings import XPATHS
 from hch_scraper.utils.data_extraction.form_helpers.selenium_utils import get_text, safe_quit
+from hch_scraper.utils.io.navigation import safe_click
 
 @dataclass
 class ModifiedDates:
@@ -70,9 +72,11 @@ def update_date_range_and_append(
             new_date = _format_date_string(new_date)
             updated_dates[i] = (start, new_date)
             # Insert the additional time slice
-            updated_dates.insert(i + 1, additional_slice)
+            additional_slice_str = (additional_slice[0].strftime("%m/%d/%Y"), additional_slice[1].strftime("%m/%d/%Y"))
+            updated_dates.insert(i + 1, additional_slice_str)
+ 
             modified = True
-            logger.info(f"Replaced {old_date} with {new_date} and added new slice {additional_slice}.")
+            logger.info(f"Replaced {old_date} with {new_date} and added new slice {additional_slice_str}.")
             break
 
     if not modified:
@@ -148,20 +152,20 @@ def check_reset_needed(
         midpoint = start_dt + (end_dt - start_dt) / 2
 
         # Creating the new time slice
-        new_slice = (midpoint + timedelta(days=1), end_dt)
-        
+        new_slice = (midpoint, end_dt)
+    
         # Updating the list of dates        
-        updated_dates, modified = update_date_range_and_append(
+        updated_dates = update_date_range_and_append(
             dates,
             end_dt,
             midpoint,
             new_slice
         )
-        
+            
         return CheckReset(
         reset_needed=True, 
-        modified=modified,
-        dates=updated_dates,
+        modified=updated_dates.modified,
+        dates=updated_dates.updated_dates,
         total_entries=total_entries
         )
     

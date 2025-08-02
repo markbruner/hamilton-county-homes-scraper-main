@@ -20,12 +20,9 @@ Modules:
 
 Configuration, logging, and XPATH settings are imported from hch_scraper utilities.
 """
-import time
-import random
+import glob, os, time, random, re, math
 import pandas as pd
-import math
-import re
-import os
+from pathlib import Path
 
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
@@ -34,7 +31,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from hch_scraper.utils.logging_setup import logger
 
 # Application settings (XPATH definitions)
-from hch_scraper.config.settings import XPATHS
+from hch_scraper.config.settings import XPATHS, data_storage
 
 # Helpers for text extraction, table scraping, and navigation
 from hch_scraper.utils.data_extraction.form_helpers.selenium_utils import get_text
@@ -263,48 +260,72 @@ def scrape_detail_pages(driver, wait, num_properties: int = 10) -> list:
             break
     return results
 
-
-def get_csv_data(wait) -> pd.DataFrame:
+def get_csv_data(wait, max_wait=30) -> pd.DataFrame:
     """
-    Downloads the search results CSV, waits for completion, reads it into a DataFrame,
-    and cleans up the temporary file.
+    Clicks the “Download CSV” link, waits for a non-empty CSV to appear,
+    loads it into a DataFrame, then deletes *all* search_results*.csv files.
 
-    Args:
-    - wait: WebDriverWait instance
+    Args
+    ----
+    wait : selenium.webdriver.support.ui.WebDriverWait
+    max_wait : int
+        Seconds to wait for a fresh CSV before giving up.
 
-    Returns:
-    - pandas DataFrame of CSV data, or empty DataFrame on error
+    Returns
+    -------
+    pd.DataFrame
     """
+    download_dir = Path(data_storage["raw"]).resolve()     # adjust if different
+    pattern      = download_dir / "search_results*.csv"
+
+    # Clean slate
+    _purge_existing_csvs(pattern)
+
+    # Trigger download
     download_search_results_csv(wait)
-    path = get_file_path(".", "raw", "search_results.csv")
-    # Wait until the file exists and is non-zero length
     start = time.time()
-    while True:
-        if os.path.exists(path) and os.path.getsize(path) > 0:
-            time.sleep(1)  # ensure write flush
-            break
-        if time.time() - start > 30:
-            logger.error(f"CSV download timeout: {path}")
-            return pd.DataFrame()
+
+    # Poll for a *new* CSV (incl.  “search_results(1).csv” fallback)
+    csv_path = None
+    while time.time() - start < max_wait:
+        matches = glob.glob(str(pattern))
+        if matches:
+            # Pick newest and make sure it's non-empty
+            newest = max(matches, key=os.path.getmtime)
+            if os.path.getsize(newest) > 0:
+                csv_path = newest
+                # extra 1-sec sleep to ensure browser flush
+                time.sleep(1)
+                break
         time.sleep(0.5)
 
+    if not csv_path:
+        logger.error("CSV download timed out; no file found.")
+        return pd.DataFrame()          # or raise, depending on your policy
+
+    # Read
     try:
-        df = pd.read_csv(path)
+        df = pd.read_csv(csv_path)
     except Exception as e:
-        logger.error(f"Failed to read CSV: {e}")
-        raise
+        logger.error(f"Failed to read CSV {csv_path}: {e}")
+        return pd.DataFrame()
 
     if df.empty:
-        logger.warning(f"Downloaded CSV is empty: {path}")
+        logger.warning(f"Downloaded CSV is empty: {csv_path}")
 
-    # Clean up file
-    try:
-        os.unlink(path)
-        logger.info(f"Deleted CSV: {path}")
-    except Exception as e:
-        logger.warning(f"Error deleting CSV: {e}")
+    # Clean up *all* matching CSVs
+    _purge_existing_csvs(pattern)
 
     return df
+
+def _purge_existing_csvs(pattern):
+    # Removes any .csv files that would keep the scraper from working properly
+    for f in glob.glob(str(pattern)):
+        try:
+            os.unlink(f)
+            logger.debug(f"Removed stale file: {f}")
+        except Exception as e:
+            logger.warning(f"Could not delete {f}: {e}")
 
 
 def scrape_data(driver, wait, num_properties_to_scrape: int) -> dict:

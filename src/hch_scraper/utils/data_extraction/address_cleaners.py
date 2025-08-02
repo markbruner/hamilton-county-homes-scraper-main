@@ -7,8 +7,15 @@ import rapidfuzz
 from rapidfuzz import process, fuzz
 import difflib
 import spacy
+from spacy.lang.en import English
+from spacy.util import compile_suffix_regex
+from dataclasses import dataclass,asdict
+from typing import Optional, Dict, Tuple
 
 from hch_scraper.utils.data_extraction.form_helpers.file_io import get_file_path
+from hch_scraper.config.mappings.street_map import street_type_map
+from hch_scraper.config.settings import direction_map, direction_map_tl, home_type_map
+from hch_scraper.geocoding import save_cache_to_disk, load_cache_from_disk
 
 """
 Address Parsing and Enrichment Utility
@@ -25,159 +32,309 @@ Key Features:
 """
 
 nlp = spacy.load("en_core_web_sm")
+nlp = English()
+suffixes = list(nlp.Defaults.suffixes)
+
+# drop the “digit-unit” suffix pattern
+suffixes = [s for s in suffixes if "(?<=[0-9])" not in s]
+nlp.tokenizer.suffix_search = compile_suffix_regex(suffixes).search
 
 # Words that spaCy typically tags as numbers but should be treated as part
 # of the street name when parsing addresses.  This includes cardinal and
 # ordinal forms so that streets like "THIRTY-SECOND" are not mistaken for
 # house numbers.
-SPELLED_OUT_NUMBERS = {
-    # cardinal numbers
-    "zero", "one", "two", "three", "four", "five", "six", "seven", "eight",
-    "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen",
-    "sixteen", "seventeen", "eighteen", "nineteen", "twenty", "thirty",
-    "forty", "fifty", "sixty", "seventy", "eighty", "ninety",
-    # ordinal numbers
-    "first", "second", "third", "fourth", "fifth", "sixth", "seventh",
-    "eighth", "ninth", "tenth", "eleventh", "twelfth", "thirteenth",
-    "fourteenth", "fifteenth", "sixteenth", "seventeenth", "eighteenth",
-    "nineteenth", "twentieth", "thirtieth", "fortieth", "fiftieth",
-    "sixtieth", "seventieth", "eightieth", "ninetieth",
+
+
+# Street-name prefix expansion map
+STREET_PREFIX_MAP = {
+    # Saint / Sainte / Saints
+    "St":      "Saint",
+    "St.":     "Saint",
+    "Ste":     "Sainte",
+    "Ste.":    "Sainte",
+    "Sts":     "Saints",
+    "Sts.":    "Saints",
+
+    # Spanish-language saints
+    "San":     "San",
+    "Santa":   "Santa",
+    "Santo":   "Santo",
+    "Santos":  "Santos",
+
+    # Mount / Mountain
+    "Mt":      "Mount",
+    "Mt.":     "Mount",
+    "Mtn":     "Mountain",
+    "Mtn.":    "Mountain",
+
+    # Fort
+    "Ft":      "Fort",
+    "Ft.":     "Fort",
+
+    # Point
+    "Pt":      "Point",
+    "Pt.":     "Point",
+
+    # Lake
+    "Lk":      "Lake",
+    "Lk.":     "Lake",
+
+    # Peak / Park  (choose meaning at runtime if context matters)
+    "Pk":      "Peak",
+    "Pk.":     "Peak",
+
+    # Port
+    "Port":    "Port",
+    "Prt":     "Port",
 }
 
-def parse_house_number(st_num_str):
-    """
-    Extracts the leading integer portion of a street number string.
+APT_HEAD_WORDS = {"#", "APT", "UNIT", "STE", "SUITE", "ROOM", "RM"}
 
+# ❱ pre-compiled regexen (compiled once instead of every call)
+HYPHEN_RE     = re.compile(r"\b(\d+)\s*-\s*(\d+)\b")
+FRACTION_RE   = re.compile(r"\b(\d+)\s+(\d+)/(\d+)\b")
+ORDINAL_RE    = re.compile(r"\b\d+(?:st|nd|rd|th)\b", re.IGNORECASE)
+APT_TAIL_RE = re.compile(r"(?:\s+|^)(?:\#\s*|(?:APT|UNIT|STE|SUITE|ROOM|RM)\s+)?([A-Z0-9]{1,6}(?:-[A-Z0-9]{1,4})?)\s*$",
+    re.IGNORECASE | re.VERBOSE,
+)
+APT_LETTER_RE = re.compile(r"\b(?!(?:N|S|E|W|NE|NW|SE|SW))[a-zA-Z]{1,2}\b", re.IGNORECASE | re.VERBOSE)
+APT_ALPHANUM_RE = re.compile(r"([a-zA-Z]{1,2}-?\d{1,4}|\d{1,4}-?[a-zA-Z]{1,2})", re.IGNORECASE | re.VERBOSE)
+DIRECTION_RE = re.compile(r"\b\s*(?:N|S|E|W|NW|SW|NE|SE|SOUTH|NORTH|EAST|WEST|NORTHEAST|SOUTHEAST|NORTHWEST|SOUTHWEST)\s*\b", re.IGNORECASE)
+EXTRA_INFO_RE = re.compile(r"\s*\([A-Za-z]+\)\s*",re.IGNORECASE | re.VERBOSE)
+
+address_parts = all_real_estate.set_index('parcel_number').to_dict(orient='index')
+CACHE_PATH = "C:/Users/markd/hamilton-county-homes-scraper-main/data/processed/address_cache.json"
+address_cache = load_cache_from_disk(CACHE_PATH)
+address_cache.update(address_parts)
+save_cache_to_disk(address_cache,CACHE_PATH)
+
+
+def build_interval_lookup(grouped: pd.core.groupby.GroupBy) -> dict[str, tuple[pd.IntervalIndex, np.ndarray, np.ndarray]]:
+    """
+    Pre-compute two IntervalIndexes (left & right) **per street**.
+
+    Returns
+    -------
+    {
+        "MAIN ST": (left_intv, left_zip, left_parity),
+        ...
+    }
+    """
+    lookups = {}
+
+    for street, segs in grouped:
+        street = street[0] if isinstance(street, tuple) else street
+        left_intv   = _make_interval(segs["L_F_ADD"], segs["L_T_ADD"])
+        right_intv  = _make_interval(segs["R_F_ADD"], segs["R_T_ADD"])
+
+        left_parity  = (segs["L_F_ADD"].astype("Int64") & 1).to_numpy()
+        right_parity = (segs["R_F_ADD"].astype("Int64") & 1).to_numpy()
+
+        lookups[street] = (
+            left_intv,
+            segs["ZIPL"].to_numpy(),
+            left_parity,
+            right_intv,
+            segs["ZIPR"].to_numpy(),
+            right_parity,
+        )
+
+    return lookups
+
+def _make_interval(start: pd.Series, end: pd.Series) -> pd.IntervalIndex:
+    try:
+        # cast to nullable Int so bitwise ops work and NAs are preserved
+        s = start.astype("Int64")
+        e = end.astype("Int64")
+
+        lower = np.minimum(s, e)   # element-wise
+        upper = np.maximum(s, e)
+        return pd.IntervalIndex.from_arrays(lower, upper, closed="both")
+    except ValueError:
+        return None
+
+def fuzzy_match_street_name(bad: str, valid_names: pd.Series, score_cut: float = 80) -> str:
+    """
+    Corrects misspelled street names.
+    
     Args:
-        st_num_str (str): A string representing a street number, such as '123A' or '4917-'.
+        bad (str): The street name that may not be correct.
+        valid_names (pd.Series): A unique list of correct street names.
+        score_cut (float) : A real number between 0 and 100 indicating the accuracy score cutoff.
 
     Returns:
-        int or None: The integer prefix if found; otherwise, None.
+        str: Either the original street name if cutoff below threshhold or the corrected street name.
+ 
     """
-    if not st_num_str or not isinstance(st_num_str, str):
-        return None
-    # Match one or more digits at the start
-    m = re.match(r"\s*(\d+)", st_num_str)
-    if m:
-        try:
-            return int(m.group(1))
-        except ValueError:
-            return None
-    return None
-
-def add_zip_code(df: pd.DataFrame,
-                 centerline_path: str = get_file_path(".", 'raw', "Countywide_Street_Centerlines.csv"),
-                 address_col: str = "address") -> pd.DataFrame:
-    """
-    Adds ZIP code information to a DataFrame based on address matching with centerline data.
-
-    Args:
-        df (pd.DataFrame): The DataFrame containing raw address data.
-        centerline_path (str): File path to the Countywide_Street_Centerlines CSV.
-        address_col (str): Column name in the DataFrame that contains full street addresses.
-
-    Returns:
-        pd.DataFrame: A copy of the input DataFrame with added 'postal_code' and corrected 'address' columns.
-
-    Raises:
-        ValueError: If required columns are missing from the centerline file.
-    """
-    # --- load & prepare centerline reference ------------------------
-    center = pd.read_csv(centerline_path, low_memory=False)
-    for col in ["NAME", "L_F_ADD", "L_T_ADD", "R_F_ADD",
-                "R_T_ADD", "ZIPL", "ZIPR", "zip_code", "city"]:
-        if col not in center.columns:
-            raise ValueError(f"Centerline CSV missing expected column '{col}'")
-
-    center["CANON"] = center["NAME,.  "]
-    gold = center["CANON"].unique()
-
-    # group by street for fast range checks
-    grouped = center.groupby("CANON")
-
-    df = df.copy()
-    df["postal_code"] = df[address_col].apply(lambda a: _zip_for_row(a, grouped, gold))
-    df["address"] = df[address_col].apply(
-        lambda a: fuzzy_match_street_name(a, gold)
-    )
-    return df
-
-def _zip_for_row(address: str, grouped: pd.core.groupby.generic.DataFrameGroupBy, gold) -> str:
-    """Return the ZIP code for a raw address string using centerline ranges."""
-    tags = tag_address(address)
-    street = tags.get("street")
-    if not street:
-        return None
-
-    if street not in grouped.groups:
-        street = fuzzy_match_street_name(street, gold)
-    if street not in grouped.groups:
-        return None
-
-    hnum = parse_house_number(tags.get("st_num"))
-    if hnum is None:
-        return None
-
-    segs = grouped.get_group(street)
-    seg = segs.loc[
-        ((segs.L_F_ADD <= hnum) & (hnum <= segs.L_T_ADD)) |
-        ((segs.R_F_ADD <= hnum) & (hnum <= segs.R_T_ADD))
-    ]
-    if seg.empty:
-        return None
-
-    seg = seg.iloc[0]
-    if hnum % 2 == 0:
-        return seg.ZIPL if seg.L_F_ADD % 2 == 0 else seg.ZIPR
-    return seg.ZIPR if seg.R_F_ADD % 2 == 1 else seg.ZIPL
-
-def fuzzy_match_street_name(bad, valid_names, score_cut=80):
     cand, score, _ = process.extractOne(
         bad, valid_names, scorer=fuzz.token_set_ratio
     )
     return cand if cand and score >= score_cut else bad
 
-def correct_street_name_fuzzy(street_name, valid_names, cutoff=0.8):
-    matches = difflib.get_close_matches(street_name, valid_names, n=1, cutoff=cutoff)
-    return matches[0] if matches else street_name
+@dataclass(slots=True)
+class AddressParts:
+    st_num:         Optional[str] = None
+    apt_num:        Optional[str] = None
+    st_dir:         Optional[str] = None
+    street_name:    Optional[str] = None
+    st_suffix:      Optional[str] = None
 
-def tag_address(address: str) -> dict:
-    """Parse an address string into components.
-
-    This helper attempts to extract a house number, an optional apartment
-    identifier and the street name.  Tokens that spaCy marks as ``NUM`` but
-    appear in ``SPELLED_OUT_NUMBERS`` are treated as normal words so that
-    streets like "THIRTY-SECOND" are handled correctly.
-    """
+def tag_address(address: str) -> AddressParts:
     if not isinstance(address, str) or not address.strip():
-        return {"st_num": None, "apt_num": None, "street": None}
+        return AddressParts()
+
+    apt_tail_match = APT_TAIL_RE.search(address)
+    tagged    = AddressParts()
     
-    doc = list(nlp(address))
-    tagged = {"st_num": None, "apt_num": None, "street": None}
+    if apt_tail_match and _apt_is_alphanumeric(apt_tail_match.group(1)):
+        tagged.apt_num = apt_tail_match.group(1).lstrip("#")
+        address = address[:apt_tail_match.start()].rstrip()
 
-    start_idx = 0
+    address = HYPHEN_RE.sub(lambda m: m.group(1), address)
 
-    if doc and doc[0].pos_ == "NUM" and doc[0].text.lower() not in SPELLED_OUT_NUMBERS:
-        tagged["st_num"] = doc[0].text
-        start_idx = 1
+    direction_match = DIRECTION_RE.search(address)
+    if direction_match:
+        direction = direction_match[0].strip()
+        if direction in direction_map :
+            tagged.st_dir = direction_map [direction]
+        else:
+            tagged.st_dir = direction
+        address = address.replace(direction_match[0],' ')
 
-    if len(doc) > start_idx:
-        tok = doc[start_idx]
-        if _is_alphanumeric(tok) and tok.text.lower() not in SPELLED_OUT_NUMBERS:
-            tagged["apt_num"] = tok.text
-            start_idx += 1
-        elif tok.pos_ == "NUM" and tok.text.lower() not in SPELLED_OUT_NUMBERS:
-            tagged["apt_num"] = tok.text
-            start_idx += 1
+    address = address.replace('-', '')
+    address = FRACTION_RE.sub(_collapse_fraction, address)
+    
+    extra_info_match = EXTRA_INFO_RE.search(address)
+    if extra_info_match:
+        address = address.replace(extra_info_match[0].rstrip(),'')
 
-    if len(doc) > start_idx:
-        tagged["street"] = " ".join(t.text for t in doc[start_idx:])
+    doc        = nlp(address)
+    start_idx  = 0      
 
+    # ── PRIMARY NUMBER (same as before) ───────────────────────────────
+    first = next((t for t in doc if not t.is_space), None)
+    if first and first.like_num and first.lower_ not in SPELLED_OUT_NUMBERS:
+        # keep the “don’t steal the street number if it’s ordinal” check
+        if not _is_ordinal(first):
+            tagged.st_num = first.text
+            start_idx = first.i + 1
+        else:
+            start_idx = first.i          # ‘32nd’ will become part of street
+    else:
+        start_idx = 0
+    # ── APARTMENT NUMBER (guarded by new helper) ─────────────────────
+    tokens = list(doc)   
+    is_apt, apt_val, consumed = _detect_apt(tokens, start_idx)
+
+    if is_apt and tagged.apt_num is None:
+        tagged.apt_num = apt_val
+        start_idx += consumed
+
+    # ── STREET & SUFFIX (ordinal tokens go in the “street” bucket) ───
+
+    parts = []
+    for tok in doc[start_idx:]:
+        canon = _canonical_suffix(tok.text)
+        if canon:
+            tagged.st_suffix = canon
+        elif tok.text in APT_HEAD_WORDS:
+            break
+        else:
+            parts.append(tok.text)
+
+    ALLOWED_PUNCT = "&"
+
+    tagged.street_name =  " ".join(
+        ch for ch in parts
+            if ch.isalnum() or ch.isspace() or ch in ALLOWED_PUNCT
+        ) or None
     return tagged
+
+def _detect_apt(tokens: list[spacy.tokens.Token], idx: int) \
+        -> tuple[bool, str | None, int]:
+    """
+    Examine tokens starting at **idx** to see whether they form an
+    apartment / unit clause *immediately* after the house-number.
+
+    Returns
+    -------
+    (is_apt?, apt_value_or_None, tokens_consumed)
+
+    Handles
+    -------
+    #2              # 2            APT 2B            APT # 2B
+    UNIT 4          SUITE 300-A    2B   (bare token)  5  (bare numeric)
+    """
+    if idx >= len(tokens):
+        return False, None, 0
+
+    tok = tokens[idx]
+
+    if tok.text.startswith("#") and len(tok.text) > 1:
+        return True, tok.text.lstrip("#"), 1
+    
+    if tok.text == "#" and idx + 1 < len(tokens):
+        nxt = tokens[idx + 1]
+        if _maybe_apt(nxt):
+            return True, nxt.text, 2
+
+    if tok.text.upper() in APT_HEAD_WORDS:
+        j = idx + 1
+        if j < len(tokens) and tokens[j].text == "#":   # skip optional '#'
+            j += 1
+        if j < len(tokens) and _maybe_apt(tokens[j]):
+            return True, tokens[j].text.lstrip("#"), j - idx + 1
+
+    if _maybe_apt(tok) and not in STREET_PREFIX_MAP:
+        return True, tok.text, 1
+
+    return False, None, 0
 
 def _is_alphanumeric(token):
     """Check if the token text is alphanumeric."""
-    return re.match("^(?=.*[0-9])(?=.*[a-zA-Z])[a-zA-Z0-9]+$", token.text) is not None
+    return re.match("^([a-zA-Z]{1,2}-?\d{1,4}|\d{1,4}-?[a-zA-Z]{1,2})", token.text) is not None
+
+def _apt_is_alphanumeric(text):
+    """Check if the token text is alphanumeric."""
+    return re.match("([a-zA-Z]{1,2}-?\d{1,4}|\d{1,4}-?[a-zA-Z]{1,2})", text) is not None
+
+def _is_alpha(token):
+    """Check if the token text is alpha"""
+    return re.match("^(?!(?:N|S|E|W|NE|NW|SE|SW))[a-zA-Z]{1,2}$", token.text) is not None
+
+
+def _is_ordinal(tok) -> bool:
+    """True for '4th', '32ND', '101st', …"""
+    return bool(ORDINAL_RE.fullmatch(tok.text))
+
+def _maybe_apt(tok) -> bool:
+    """Heuristic for apartment / unit IDs (excludes ordinals)."""
+    return (
+        not _is_ordinal(tok)
+        and tok.lower_ not in SPELLED_OUT_NUMBERS
+        and (tok.like_num 
+             or _is_alphanumeric(tok)
+             or _is_alpha(tok))
+    )
+
+def _collapse_fraction(m: re.Match) -> str:
+    whole, num, den = m.groups()
+    value = int(whole) + int(num) / int(den)      # 915 + 1/2 → 915.5
+    # stringify *once* so you don’t end up with 9150.5
+    return f"{value:g}".rstrip(".")
+
+_suffix_to_spellings = {}
+for spelling, canon in street_type_map.items():
+    _suffix_to_spellings.setdefault(canon, set()).add(spelling)
+
+# Flat list of valid spellings for fuzzy match
+_valid_spellings = [*street_type_map.keys()]
+
+def _canonical_suffix(raw: str, cutoff: float = 0.90) -> str | None:
+    """Return canonical suffix ('STREET', 'AVENUE', …) or None."""
+    tok = raw.upper().rstrip(".")          # "Av." -> "AV"
+    if tok in street_type_map:
+        return street_type_map[tok]
 
 # ------------------------------------------------------------------
 #  ADDRESS ENRICHER – one-time loader you can reuse in callbacks etc.
@@ -195,39 +352,51 @@ class AddressEnricher:
         enrich(raw_address): Returns a dictionary with parsed and enriched address components.
     """
     def __init__(self,
-                 centerline_path=get_file_path(".", 'raw', "Countywide_Street_Centerlines.csv"),
-                 zipcode_path=get_file_path(".", 'raw', "Countywide_Zip_Codes.csv"),
+                 centerline_path=get_file_path(".", 'raw/downloads', "Countywide_Street_Centerlines.csv"),
+                 zipcode_path=get_file_path(".", 'raw/downloads', "Countywide_Zip_Codes.csv"),
+                 all_real_estate_path=get_file_path(".","raw/home_sales","all_homes.csv"),
                  score_cut=80):
         
         #Load csv files
         center = pd.read_csv(centerline_path, low_memory=False)
-        zip_df = pd.read_csv(zipcode_path, low_memory=False)
+        all_real_estate = pd.read_csv(all_real_estate_path, low_memory=False)
 
-        #Prepare zip to city mapping
-        zip_map = (
-            zip_df[["ZIPCODE", "USPSCITY"]]
-            .dropna(subset=["ZIPCODE", "USPSCITY"])
-            .drop_duplicates("ZIPCODE")
-            .rename(columns={"ZIPCODE": "zip_code", "USPSCITY": "city"})
-        )
-        center.loc[center["ZIPL"]==' ',"ZIPL"] = 0
-        center.loc[center["ZIPR"]==' ',"ZIPR"] = 0
-        # In centerlines, pick one ZIP per segment
-        center["zip_code"] = center["ZIPL"].fillna(center["ZIPR"]).fillna(0).astype(int)
+        center['ZIPR'] = center['ZIPR'].replace(' ',np.nan).astype('Int64')
+        center['ZIPL'] = center['ZIPL'].replace(' ',np.nan).astype('Int64')
 
-        # 4. Merge (no duplicates in centerlines)
-        center = center.merge(zip_map, on="zip_code", how="left")
+        # group by street for fast range checks
+        grouped = center[center["CLASS"].isin([2,3,4,5])].groupby(["STREET_NORM"])
 
-        needed = ["NAME", "L_F_ADD", "L_T_ADD",
-                  "R_F_ADD", "R_T_ADD", "ZIPL", "ZIPR", "zip_code", "city"]
-        missing = [c for c in needed if c not in center.columns]
-        if missing:
-            raise ValueError(f"Centerline CSV missing {missing}")
+        all_real_estate.amount = all_real_estate.amount.str.replace('$','').str.replace(',','').astype('Int64')
+        all_real_estate['transfer_date'] = pd.to_datetime(all_real_estate.transfer_date)
+        all_real_estate['day_of_week'] = all_real_estate['transfer_date'].dt.day_of_week
+        all_real_estate['month_day'] = all_real_estate['transfer_date'].dt.day
+        all_real_estate['month'] = all_real_estate['transfer_date'].dt.month
+        all_real_estate['year'] = all_real_estate['transfer_date'].dt.year
 
-        center["CANON"] = center["NAME"]
-        self._grouped  = center.groupby("CANON")
-        self._gold     = center["CANON"].unique()
-        self._score_cut = score_cut
+        all_real_estate['home_type'] = all_real_estate['use'].astype('str').map(home_type_map)
+        all_real_estate = pd.concat([all_real_estate,all_real_estate['bbb'].str.split('-',expand=True).rename(columns={0:'total_rooms',
+                                                                1: 'bedrooms',
+                                                                2: 'full_baths',
+                                                                3: 'half_baths'
+                                                            })], axis=1)
+        
+        all_real_estate['year_built'] = all_real_estate['year_built'].astype('Int64')
+        all_real_estate['st_num'] = all_real_estate['st_num'].astype('float').round(0).astype('Int64')        
+        lookups = build_interval_lookup(grouped=grouped)
+        polygons = polygons.rename(columns={"AUDPTYID":'parcel_number'})
+        polygons['parcel_number'] = polygons['parcel_number'].astype('str').str.strip()
+        all_real_estate['parcel_number'] = all_real_estate['parcel_number'].str.replace('-','').str.strip()
+        polygons = polygons.to_crs(epsg=3735) 
+        polygons["centroid"] = polygons.geometry.centroid
+        polygons["geometry"] = polygons.geometry
+        # Compute centroids
+        centroids_ll = polygons.set_geometry("centroid").to_crs(epsg=4326)
+        polygons["lon"] = centroids_ll.geometry.x
+        polygons["lat"] = centroids_ll.geometry.y
+
+        merged_geo = all_real_estate.merge(polygons, on="parcel_number", how="left")
+        return None
 
     # ---------- public --------------
     def enrich(self, raw_address: str) -> dict:
@@ -242,58 +411,15 @@ class AddressEnricher:
         """
         tags = tag_address(raw_address)          # your existing parser
 
+        all_real_estate = pd.concat([all_real_estate, parts], axis=1)
+
         # nothing to do if we couldn't parse a street name
-        if not tags["street"]:
+        if not tags["street_name"]:
             return {**tags, "postal_code": None, "street_corrected": None, "city": None}
-
-        canon_street = tags["street"]
-
-        if canon_street not in self._grouped.groups:
-            canon_street = fuzzy_match_street_name(
-                canon_street, self._gold, score_cut=self._score_cut
-            )
-        # Still None?  Return tags unchanged
-        if canon_street is None or canon_street not in self._grouped.groups:
-            return {**tags, "postal_code": None, "street_corrected": None, "city": None}
-
-        # ZIP via range logic --------------------------------------
-        hnum = parse_house_number(tags.get("st_num"))
-        zip_code = None
-        city = None
-        segs = self._grouped.get_group(canon_street)
-        if hnum is not None:
-            seg = segs.loc[
-                ((segs.L_F_ADD <= hnum) & (hnum <= segs.L_T_ADD)) |
-                ((segs.R_F_ADD <= hnum) & (hnum <= segs.R_T_ADD))
-            ]
-            if not seg.empty:
-                seg = seg.iloc[0]
-                city = seg.city
-                if hnum % 2 == 0:
-                    zip_code = seg.ZIPL if seg.L_F_ADD % 2 == 0 else seg.ZIPR
-                else:
-                    zip_code = seg.ZIPR if seg.R_F_ADD % 2 == 1 else seg.ZIPL
-        else:
-            # When no house number is provided, fall back to any unique
-            # city/ZIP listed for the street in the centerlines dataset.
-            cities = segs.city.dropna().unique()
-            if len(cities) == 1:
-                city = cities[0]
-            zips = pd.concat([segs.ZIPL, segs.ZIPR]).dropna().unique()
-            if len(zips) == 1:
-                zip_code = zips[0]
-
-        return {
-            **tags,
-            "postal_code": zip_code,
-            "street_corrected": canon_street,
-            "city": city,
-            "state":"Ohio",
-        }
 
 
 # instantiate once so every downstream module can import & reuse it
-# address_enricher = AddressEnricher()
+address_enricher = AddressEnricher()
 
 if os.environ.get("HCH_SCRAPER_SKIP_ENRICHER"):
     address_enricher = None

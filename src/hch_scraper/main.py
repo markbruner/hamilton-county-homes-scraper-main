@@ -18,7 +18,7 @@ To run:
 
 import time
 import pandas as pd
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import Union, List, Tuple
 from dataclasses import dataclass
 
@@ -107,6 +107,55 @@ def _ask_date(prompt: str) -> date:
         except ValueError:
             print("↳ Invalid date format. Please use MM/DD/YYYY.")
 
+def run_scraper_for_year(dates: Dates, year: int, robots_txt_allowed: bool) -> ScraperResult:
+    """
+    Runs the scraper for a single year within the specified date range.
+
+    Args:
+        dates (Dates): Object containing start date, end date, and years to loop through.
+        year (int): The year currently being processed.
+        robots_txt_allowed (bool): Whether scraping is permitted by robots.txt.
+
+    Returns:
+        ScraperResult: Structured result containing scraped data and metadata.
+    """
+    formatted_start = _format_date(dates.start_date)
+    formatted_end = _format_date(dates.end_date)
+    ranges = _initialize_ranges(formatted_start, formatted_end)
+
+    data = _scrape_all_dates(ranges, robots_txt_allowed, formatted_start, formatted_end)
+
+    return ScraperResult(
+        data=data,
+        remaining_ranges=ranges,
+        final_start=formatted_start,
+        final_end=formatted_end,
+        year=year
+    )
+
+def _scrape_all_dates(ranges: List[Tuple[str, str]], robots_txt_allowed: bool, search_start, search_end) -> pd.DataFrame:
+    """
+    Loops through ranges and gathers all data into a single DataFrame.
+
+    Args:
+        ranges (List[Tuple[str, str]]): The list of start-end date tuples to scrape.
+        robots_txt_allowed (bool): Flag indicating if scraping is allowed.
+
+    Returns:
+        pd.DataFrame: Combined DataFrame of all scraped data.
+    """
+    all_data_df = pd.DataFrame()
+    while ranges[:]:
+        for start, end in ranges[:]:
+            logger.info(f"Scraping from {start} to {end}")
+            all_data, updated_ranges, driver, modified = main(robots_txt_allowed, ScrapeRequest(start,end,ranges))
+            if modified:
+                ranges = updated_ranges  # main split the date range; retry
+                break
+            final_csv_conversion(all_data, search_start, search_end)
+
+    return all_data_df
+
 def run_scraper_pipeline():
     """
     Executes the full scraping pipeline.
@@ -126,60 +175,6 @@ def run_scraper_pipeline():
         logger.info(f"Starting scraping process for year {year}")
         run_scraper_for_year(dates, year, robots_txt_allowed)
 
-def run_scraper_for_year(dates: Dates, year: int, robots_txt_allowed: bool) -> ScraperResult:
-    """
-    Runs the scraper for a single year within the specified date range.
-
-    Args:
-        dates (Dates): Object containing start date, end date, and years to loop through.
-        year (int): The year currently being processed.
-        robots_txt_allowed (bool): Whether scraping is permitted by robots.txt.
-
-    Returns:
-        ScraperResult: Structured result containing scraped data and metadata.
-    """
-    formatted_start = _format_date(dates.start_date)
-    formatted_end = _format_date(dates.end_date)
-    ranges = _initialize_ranges(formatted_start, formatted_end)
-
-    data = _scrape_all_dates(ranges, robots_txt_allowed)
-
-    final_csv_conversion(data, ranges, formatted_start, formatted_end, year)
-
-    return ScraperResult(
-        data=data,
-        remaining_ranges=ranges,
-        final_start=formatted_start,
-        final_end=formatted_end,
-        year=year
-    )
-
-def _scrape_all_dates(ranges: List[Tuple[str, str]], robots_txt_allowed: bool) -> pd.DataFrame:
-    """
-    Loops through ranges and gathers all data into a single DataFrame.
-
-    Args:
-        ranges (List[Tuple[str, str]]): The list of start-end date tuples to scrape.
-        robots_txt_allowed (bool): Flag indicating if scraping is allowed.
-
-    Returns:
-        pd.DataFrame: Combined DataFrame of all scraped data.
-    """
-    all_data_df = pd.DataFrame()
-
-    for start, end in ranges[:]:  # iterate over a copy
-        logger.info(f"Scraping from {start} to {end}")
-        request = ScrapeRequest(start=start, end=end, ranges=ranges)
-        all_data, updated_ranges, driver, modified = main(robots_txt_allowed, request)
-
-        if modified:
-            ranges = updated_ranges  # main split the date range; retry
-            break
-
-        all_data_df = _consolidate_data(all_data_df, all_data)
-
-    return all_data_df
-
 def _consolidate_data(existing: pd.DataFrame, new_data: pd.DataFrame) -> pd.DataFrame:
     """
     Concatenates new scraped data into the existing DataFrame.
@@ -197,9 +192,40 @@ def _format_date(dt: date) -> str:
     """Formats a date object to MM/DD/YYYY string."""
     return dt.strftime("%m/%d/%Y")
 
-def _initialize_ranges(start: str, end: str) -> List[Tuple[str, str]]:
-    """Returns a list containing a single start-end date range tuple."""
-    return [(start, end)]
+def _initialize_ranges(
+    start: str,
+    end: str,
+    fmt: str = "%m/%d/%Y",     # <-- MM/DD/YYYY by default
+    window_days: int = 6
+) -> List[Tuple[str, str]]:
+    """
+    Break the overall [start, end] span into consecutive `window_days`-long
+    intervals (inclusive) and return them as (start, end) string tuples.
+
+    Example
+    -------
+    >>> _initialize_ranges("06/01/2025", "06/12/2025")
+    [('06/01/2025', '06/04/2025'),
+     ('06/05/2025', '06/08/2025'),
+     ('06/09/2025', '06/12/2025')]
+    """
+    start_dt = datetime.strptime(start, fmt).date()
+    end_dt   = datetime.strptime(end,   fmt).date()
+    if start_dt > end_dt:
+        raise ValueError("`start` must be on or before `end`.")
+
+    step   = timedelta(days=window_days)
+    ranges = []
+
+    current_start = start_dt
+    while current_start <= end_dt:
+        current_end = min(current_start + step, end_dt)
+        ranges.append(
+            (current_start.strftime(fmt), current_end.strftime(fmt))
+        )
+        current_start += step
+
+    return ranges
 
 def main(robots_txt_allowed: bool, request: ScrapeRequest) -> Tuple[pd.DataFrame, List[Tuple[str, str]], object, bool]:
     """
@@ -226,17 +252,16 @@ def main(robots_txt_allowed: bool, request: ScrapeRequest) -> Tuple[pd.DataFrame
         initialize_search(wait, request.start, request.end)
         time.sleep(2)
         check = check_reset_needed(driver, wait, request.start, request.end, request.ranges)
-
         if check.reset_needed:
             logger.info("Reset needed, closing WebDriver.")
             return pd.DataFrame(), check.dates, driver, check.modified
 
         data = get_csv_data(wait)
 
-        
         logger.info(
             f"Completed scraping for {request.start}–{request.end}: {data.shape[0]} rows."
         )
+        check.dates.pop(0)
         return data, check.dates, driver, check.modified
 
     finally:

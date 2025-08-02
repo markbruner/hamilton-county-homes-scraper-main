@@ -14,6 +14,7 @@ Functions:
 """
 from typing import List, Tuple
 import pandas as pd
+import numpy as np
 
 from hch_scraper.config.settings import XPATHS
 from hch_scraper.utils.logging_setup import logger
@@ -23,7 +24,7 @@ from hch_scraper.utils.data_extraction.form_helpers.selenium_utils import fill_f
 from hch_scraper.utils.data_extraction.table_extraction import transform_table
 
 
-def find_missing_rows(df: pd.Dataframe) -> Tuple[List[str], List[str]]:
+def find_missing_rows(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
     """
     Identify rows where any of a set of required columns are missing.
 
@@ -44,7 +45,9 @@ def find_missing_rows(df: pd.Dataframe) -> Tuple[List[str], List[str]]:
               to those same rows.
     """
     # Filter rows where any of the required columns is null
-    mask = df.isnull().any(axis=1)
+    key_cols = ["ACREDEED", "SCHOOL_CODE_DIS", "MKTLND","MKTIMP","MKT_TOTAL_VAL","ANNUAL_TAXES"]
+
+    mask = df[key_cols].isnull().any(axis=1)
 
     # Extract the parcel numbers and transfer dates for those rows
     parcel_numbers = df.loc[mask, 'parcel_number'].to_list()
@@ -72,6 +75,10 @@ def extract_patched_property_details(driver, id, wait):
             - None if scraping fails or the table is empty.
     """
     try:
+        if id == np.nan:
+            logger.warning(f"Parcel ID is {id}.")
+            return None
+        
         # 1. Scrape the appraisal table for this parcel
         appraisal_table = scrape_table_by_xpath(
             wait, XPATHS["view"]["appraisal_information"]
@@ -124,9 +131,7 @@ def extract_patched_property_details(driver, id, wait):
         "Market Total Value":"MKT_TOTAL_VAL", 
         }, axis=1, inplace=True)
 
-
-
-        return appraisal_table
+        return parcel_info
 
     except Exception as e:
         # Log with the problematic ID
@@ -166,9 +171,9 @@ def patch_data(wait, driver, missing_id):
     safe_click(wait, XPATHS["search"]["parcel_id_search_button"])
 
     # Extract the table for this single parcel
-    appraisal_table = extract_patched_property_details(driver, missing_id, wait)
+    parcel_info = extract_patched_property_details(driver, missing_id, wait)
 
     # Reset the UI back to the main search form
     safe_click(wait, XPATHS["property"]["new_search"])
 
-    return appraisal_table
+    return parcel_info
