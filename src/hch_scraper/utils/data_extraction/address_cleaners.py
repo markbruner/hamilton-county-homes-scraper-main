@@ -13,8 +13,9 @@ from dataclasses import dataclass,asdict
 from typing import Optional, Dict, Tuple
 
 from hch_scraper.utils.data_extraction.form_helpers.file_io import get_file_path
-from hch_scraper.config.mappings.street_map import street_type_map
-from hch_scraper.config.settings import direction_map, direction_map_tl, home_type_map
+from hch_scraper.config.mappings import street_type_map
+from hch_scraper.config.settings import direction_map, home_type_map
+from hch_scraper.config.translations import spelled_out_numbers
 from hch_scraper.geocoding import save_cache_to_disk, load_cache_from_disk
 
 """
@@ -101,12 +102,6 @@ APT_LETTER_RE = re.compile(r"\b(?!(?:N|S|E|W|NE|NW|SE|SW))[a-zA-Z]{1,2}\b", re.I
 APT_ALPHANUM_RE = re.compile(r"([a-zA-Z]{1,2}-?\d{1,4}|\d{1,4}-?[a-zA-Z]{1,2})", re.IGNORECASE | re.VERBOSE)
 DIRECTION_RE = re.compile(r"\b\s*(?:N|S|E|W|NW|SW|NE|SE|SOUTH|NORTH|EAST|WEST|NORTHEAST|SOUTHEAST|NORTHWEST|SOUTHWEST)\s*\b", re.IGNORECASE)
 EXTRA_INFO_RE = re.compile(r"\s*\([A-Za-z]+\)\s*",re.IGNORECASE | re.VERBOSE)
-
-address_parts = all_real_estate.set_index('parcel_number').to_dict(orient='index')
-CACHE_PATH = "C:/Users/markd/hamilton-county-homes-scraper-main/data/processed/address_cache.json"
-address_cache = load_cache_from_disk(CACHE_PATH)
-address_cache.update(address_parts)
-save_cache_to_disk(address_cache,CACHE_PATH)
 
 
 def build_interval_lookup(grouped: pd.core.groupby.GroupBy) -> dict[str, tuple[pd.IntervalIndex, np.ndarray, np.ndarray]]:
@@ -213,7 +208,7 @@ def tag_address(address: str) -> AddressParts:
 
     # ── PRIMARY NUMBER (same as before) ───────────────────────────────
     first = next((t for t in doc if not t.is_space), None)
-    if first and first.like_num and first.lower_ not in SPELLED_OUT_NUMBERS:
+    if first and first.like_num and first.lower_ not in spelled_out_numbers:
         # keep the “don’t steal the street number if it’s ordinal” check
         if not _is_ordinal(first):
             tagged.st_num = first.text
@@ -285,7 +280,7 @@ def _detect_apt(tokens: list[spacy.tokens.Token], idx: int) \
         if j < len(tokens) and _maybe_apt(tokens[j]):
             return True, tokens[j].text.lstrip("#"), j - idx + 1
 
-    if _maybe_apt(tok) and not in STREET_PREFIX_MAP:
+    if _maybe_apt(tok) and tok not in STREET_PREFIX_MAP:
         return True, tok.text, 1
 
     return False, None, 0
@@ -311,7 +306,7 @@ def _maybe_apt(tok) -> bool:
     """Heuristic for apartment / unit IDs (excludes ordinals)."""
     return (
         not _is_ordinal(tok)
-        and tok.lower_ not in SPELLED_OUT_NUMBERS
+        and tok.lower_ not in spelled_out_numbers
         and (tok.like_num 
              or _is_alphanumeric(tok)
              or _is_alpha(tok))
@@ -360,6 +355,11 @@ class AddressEnricher:
         #Load csv files
         center = pd.read_csv(centerline_path, low_memory=False)
         all_real_estate = pd.read_csv(all_real_estate_path, low_memory=False)
+        address_parts = all_real_estate.set_index('parcel_number').to_dict(orient='index')
+        CACHE_PATH = "C:/Users/markd/hamilton-county-homes-scraper-main/data/processed/address_cache.json"
+        address_cache = load_cache_from_disk(CACHE_PATH)
+        address_cache.update(address_parts)
+        save_cache_to_disk(address_cache,CACHE_PATH)
 
         center['ZIPR'] = center['ZIPR'].replace(' ',np.nan).astype('Int64')
         center['ZIPL'] = center['ZIPL'].replace(' ',np.nan).astype('Int64')
@@ -410,8 +410,6 @@ class AddressEnricher:
             dict: A dictionary with fields: st_num, apt_num, street, postal_code, street_corrected, city, state.
         """
         tags = tag_address(raw_address)          # your existing parser
-
-        all_real_estate = pd.concat([all_real_estate, parts], axis=1)
 
         # nothing to do if we couldn't parse a street name
         if not tags["street_name"]:

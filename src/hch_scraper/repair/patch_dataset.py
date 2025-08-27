@@ -42,7 +42,7 @@ from hch_scraper.utils.io.navigation import safe_click
 
 # Configuration constants
 from hch_scraper.config.settings import XPATHS, URLS
-from hch_scraper.config.mappings.street_map import street_type_map
+from hch_scraper.config.mappings import street_type_map
 
 # Data formatting helper
 from hch_scraper.utils.data_extraction.form_helpers.data_formatting import clean_and_format_columns
