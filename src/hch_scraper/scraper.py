@@ -56,7 +56,6 @@ def download_search_results_csv(wait) -> None:
     """
     safe_click(wait, XPATHS["results"]["download_csv"])
 
-
 def extract_property_details(driver, wait) -> pd.DataFrame:
     """
     Extracts and processes detailed property information from a single property page.
