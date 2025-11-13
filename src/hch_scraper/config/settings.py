@@ -1,7 +1,7 @@
 import yaml
 from pathlib import Path
 
-CONFIG_PATH = Path(__file__).parent / "xpaths.yaml"
+CONFIG_PATH = Path(__file__).parent / "selectors/xpaths.yaml"
 
 # Loading XPaths and other settings from YAML file
 def load_config(file_path):
@@ -287,10 +287,10 @@ CLUSTER_MIN_SIZE = 5
 CLUSTER_MIN_SAMPLES = 1
 
 # Normalized street suffix mapping
-from hch_scraper.config.mappings.street_map import street_type_map
+from hch_scraper.config.mappings.street_types import street_type_map
 
 # School district mappings
-from hch_scraper.config.mappings.district_map import school_city_map, zip_code_map
+from hch_scraper.config.mappings.school_districts import school_city_map, zip_code_map
 
 
 
