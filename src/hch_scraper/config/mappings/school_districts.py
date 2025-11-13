@@ -1,0 +1,26 @@
+school_city_map = {
+    'CINCINNATI CSD':'Cincinnati', 
+    'DEER PARK CSD':'Cincinnati',
+    'FINNEYTOWN LSD':'Cincinnati',
+    'FOREST HILLS LSD':'Cincinnati',
+    'INDIAN HILL EVSD':'Indian Hills',
+    'LOCKLAND CSD': 'Cincinnati',
+    'LOVELAND CSD':'Loveland', 
+    'NORTHWEST LSD (HAMILTON CO.)':'Cincinnati',
+    'MADEIRA CSD':'Madeira', 
+    'MARIEMONT CSD':'Mariemont', 
+    'MILFORD CSD':'Milford',
+    'MOUNT HEALTHY CSD':'Cincinnati',
+    'NORTH COLLEGE HILL CSD':'Cincinnati',
+    'NORWOOD CSD':'Norwood', 
+    'OAK HILLS LSD':'Cincinnati', 
+    'PRINCETON CSD':'Cincinnati',
+    'READING CSD':'Reading',
+    'SOUTHWEST LSD (HAMILTON CO.)':'Harrison',
+    'ST. BERNARD-ELMWOOD PLACE CSD':'Cincinnati',
+    'SYCAMORE CSD':'Montgomery', 
+    'THREE RIVERS LSD':'Cleves',
+    'WINTON WOODS CSD':'Cincinnati',
+    'WYOMING CSD':'Wyoming'
+}
+

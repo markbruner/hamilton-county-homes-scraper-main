@@ -31,18 +31,18 @@ import geopandas as gpd
 from hch_scraper.utils.logging_setup import logger
 
 # Geocoding
-from hch_scraper.geocoding import geocode_until_complete
+from hch_scraper.services.geocoding import geocode_until_complete
 
 # Utilities for repairing missing data
-from hch_scraper.repair.fetch_missing_data import patch_data, find_missing_rows
+from hch_scraper.pipelines.fetch_missing_data import patch_data, find_missing_rows
 
 # Selenium driver setup and navigation helpers
-from hch_scraper.driver_setup import init_driver
-from hch_scraper.utils.io.navigation import safe_click
+from hch_scraper.drivers.selenium import init_driver
+from hch_scraper.io.navigation import safe_click
 
 # Configuration constants
 from hch_scraper.config.settings import XPATHS, URLS
-from hch_scraper.config.mappings import street_type_map
+from hch_scraper.config.mappings.street_types import street_type_map
 
 # Data formatting helper
 from hch_scraper.utils.data_extraction.form_helpers.data_formatting import clean_and_format_columns

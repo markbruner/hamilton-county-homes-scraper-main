@@ -13,10 +13,10 @@ from dataclasses import dataclass,asdict
 from typing import Optional, Dict, Tuple
 
 from hch_scraper.utils.data_extraction.form_helpers.file_io import get_file_path
-from hch_scraper.config.mappings import street_type_map
+from hch_scraper.config.mappings.street_types import street_type_map
 from hch_scraper.config.settings import direction_map, home_type_map
-from hch_scraper.config.translations import spelled_out_numbers
-from hch_scraper.geocoding import save_cache_to_disk, load_cache_from_disk
+from hch_scraper.config.mappings.secondary_units import spelled_out_numbers
+from hch_scraper.services.geocoding import save_cache_to_disk, load_cache_from_disk
 
 """
 Address Parsing and Enrichment Utility

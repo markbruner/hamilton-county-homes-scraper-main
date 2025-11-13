@@ -18,8 +18,8 @@ import numpy as np
 
 from hch_scraper.config.settings import XPATHS
 from hch_scraper.utils.logging_setup import logger
-from hch_scraper.scraper import scrape_table_by_xpath
-from hch_scraper.utils.io.navigation import safe_click
+from hch_scraper.io.downloads import scrape_table_by_xpath
+from hch_scraper.io.navigation import safe_click
 from hch_scraper.utils.data_extraction.form_helpers.selenium_utils import fill_form_field, get_text
 from hch_scraper.utils.data_extraction.table_extraction import transform_table
 

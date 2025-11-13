@@ -24,10 +24,10 @@ from dataclasses import dataclass
 
 from hch_scraper.utils.logging_setup import logger
 from hch_scraper.config.settings import URLS
-from hch_scraper.driver_setup import init_driver
-from hch_scraper.scraper import get_csv_data
+from hch_scraper.drivers.selenium import init_driver
+from hch_scraper.io.downloads import get_csv_data
 
-from hch_scraper.utils.io.navigation import initialize_search, check_allowed_webscraping
+from hch_scraper.io.navigation import initialize_search, check_allowed_webscraping
 from hch_scraper.utils.data_extraction.form_helpers.selenium_utils import safe_quit
 from hch_scraper.utils.data_extraction.form_helpers.data_formatting import final_csv_conversion
 from hch_scraper.utils.data_extraction.form_helpers.datetime_utils import check_reset_needed

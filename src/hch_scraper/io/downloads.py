@@ -40,7 +40,7 @@ from hch_scraper.utils.data_extraction.table_extraction import (
     transform_table,
     find_click_row
 )
-from hch_scraper.utils.io.navigation import safe_click, next_navigation
+from hch_scraper.io.navigation import safe_click, next_navigation
 from hch_scraper.utils.data_extraction.form_helpers.file_io import get_file_path
 
 
