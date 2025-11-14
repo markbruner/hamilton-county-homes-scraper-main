@@ -168,11 +168,18 @@ def fuzzy_match_street_name(bad: str, valid_names: pd.Series, score_cut: float =
 
 @dataclass(slots=True)
 class AddressParts:
-    st_num:         Optional[str] = None
-    apt_num:        Optional[str] = None
-    st_dir:         Optional[str] = None
-    street_name:    Optional[str] = None
-    st_suffix:      Optional[str] = None
+    
+    def __init__(self, normalize_case: bool = True):
+        address = self.address
+
+def _preclean(raw, addr: str):
+    if not addr:
+        return ""
+    addr = addr.strip()
+    addr = addr.sub(r"[^\w\s]", " ")
+    addr = addr.sub(r"\s+"," ")
+    addr = addr.lower()
+    
 
 def tag_address(address: str) -> AddressParts:
     if not isinstance(address, str) or not address.strip():
