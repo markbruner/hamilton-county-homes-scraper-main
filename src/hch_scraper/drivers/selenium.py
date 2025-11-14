@@ -47,7 +47,7 @@ def is_valid_url(url: str) -> bool:
 def init_driver(
     base_url: str,
     driver_type: str = "firefox",
-    headless: bool = True,
+    headless: bool = False,
     max_retries: int = MAX_RETRIES,
     timeout: int = TIMEOUT
 ) -> tuple:

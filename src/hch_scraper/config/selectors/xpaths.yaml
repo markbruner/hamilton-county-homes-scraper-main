@@ -3,7 +3,8 @@
 base_url: 'https://www.hamiltoncountyauditor.org/'
 
 search:
-  property_search: '//*[@id="leftFrontPage"]/a[1]'
+  # property_search: '//*[@id="leftFrontPage"]/a[1]'
+  property_search: '//*[@id="depts"]/div/div[1]/div[1]'
 
   # The radio button to select to search by sales. 
   parcel_id: '//*[@id="search_radio_parcel_id"]'

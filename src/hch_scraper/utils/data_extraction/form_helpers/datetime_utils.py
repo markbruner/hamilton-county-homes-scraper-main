@@ -11,7 +11,7 @@ import time
 from hch_scraper.utils.logging_setup import logger
 from hch_scraper.config.settings import XPATHS
 from hch_scraper.utils.data_extraction.form_helpers.selenium_utils import get_text, safe_quit
-from hch_scraper.utils.io.navigation import safe_click
+from hch_scraper.io.navigation import safe_click
 
 @dataclass
 class ModifiedDates:

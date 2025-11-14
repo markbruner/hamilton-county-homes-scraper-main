@@ -290,8 +290,10 @@ CLUSTER_MIN_SAMPLES = 1
 from hch_scraper.config.mappings.street_types import street_type_map
 
 # School district mappings
-from hch_scraper.config.mappings.school_districts import school_city_map, zip_code_map
+from hch_scraper.config.mappings.school_districts import school_city_map
 
+# Postal code mappings
+from hch_scraper.config.mappings.postal_codes import zip_code_map
 
 
 
