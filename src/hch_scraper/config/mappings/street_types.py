@@ -566,3 +566,25 @@ street_prefix_map = {
     "PORT":    "PORT",
     "PRT":     "PORT",
 }
+
+direction_map = {
+    "SOUTH":"S", 
+    "NORTH":"N",
+    "EAST":"E",
+    "WEST":"W",
+    "NORTHEAST":"NE",
+    "SOUTHEAST":"SE",
+    "NORTHWEST":"NW",
+    "SOUTHWEST":"SW",
+    }
+
+direction_map_tl = {
+    "S":"SOUTH", 
+    "N":"NORTH",
+    "E":"EAST",
+    "W":"WEST",
+    "NE":"NORTHEAST",
+    "SE":"SOUTHEAST",
+    "NW":"NORTHWEST",
+    "SW":"SOUTHWEST",
+    }
