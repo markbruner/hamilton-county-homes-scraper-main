@@ -512,6 +512,21 @@ canonical_to_abbrev: dict[str, str] = {
     "WELLS":        "WLS",
 }
 
+# Some canonical forms don’t appear in canonical_to_abbrev; map them to
+# the closest USPS style manually.
+_suffix_abbrev_fallbacks: dict[str, str] = {
+    "ISLES": "ISLE",  
+    "PATHS": "PATH",
+    "PIKES": "PIKE",
+    "SPURS": "SPUR",
+}
+
+# Fully normalized: messy input token → USPS suffix abbreviation
+street_suffix_normalization_map: dict[str, str] = {}
+for variant, canonical in street_type_map.items():
+    abbr = canonical_to_abbrev.get(canonical) or _suffix_abbrev_fallbacks.get(canonical) or canonical
+    street_suffix_normalization_map[variant] = abbr
+
 direction_map = {
     "N": "NORTH",
     "S": "SOUTH",
@@ -522,8 +537,6 @@ direction_map = {
     "NE": "NORTHEAST",
     "SE": "SOUTHEAST",
     }
-
-direction_map_tl = {i[1]:i[0] for i in direction_map.items()}
 
 street_prefix_map = {
     # Saint / Sainte / Saints
@@ -578,13 +591,33 @@ direction_map = {
     "SOUTHWEST":"SW",
     }
 
-direction_map_tl = {
-    "S":"SOUTH", 
-    "N":"NORTH",
-    "E":"EAST",
-    "W":"WEST",
-    "NE":"NORTHEAST",
-    "SE":"SOUTHEAST",
-    "NW":"NORTHWEST",
-    "SW":"SOUTHWEST",
-    }
+
+direction_abbrev_to_full = {
+    "N": "NORTH",
+    "S": "SOUTH",
+    "E": "EAST",
+    "W": "WEST",
+    "NW": "NORTHWEST",
+    "SW": "SOUTHWEST",
+    "NE": "NORTHEAST",
+    "SE": "SOUTHEAST",
+}
+
+direction_full_to_abbrev = {
+    v: k for k, v in direction_abbrev_to_full.items()
+}
+
+# Full → abbreviation (USPS canonical)
+direction_full_to_abbrev: dict[str, str] = {
+    full: abbr for abbr, full in direction_abbrev_to_full.items()
+}
+
+# Normalize any direction-ish token to USPS abbreviation
+direction_normalization_map: dict[str, str] = {
+    # already-abbrev inputs
+    **{abbr: abbr for abbr in direction_abbrev_to_full},
+    # full-word inputs
+    **direction_full_to_abbrev,
+}
+
+

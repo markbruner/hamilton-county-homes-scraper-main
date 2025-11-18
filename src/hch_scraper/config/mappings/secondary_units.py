@@ -125,3 +125,9 @@ secondary_unit_type_map: dict[str, str] = {
     # — Upper —
     "UPPR": "UPPER", "UPPR.": "UPPER", "UPPER": "UPPER", "UPR": "UPPER",
 }
+
+# messy unit token → USPS abbreviation (APT, STE, etc.)
+secondary_unit_normalization_map: dict[str, str] = {
+    variant: secondary_unit_abbrev_map[canonical]
+    for variant, canonical in secondary_unit_type_map.items()
+}

@@ -9,7 +9,7 @@ school_city_map = {
     'NORTHWEST LSD (HAMILTON CO.)':'Cincinnati',
     'MADEIRA CSD':'Madeira', 
     'MARIEMONT CSD':'Mariemont', 
-    'MILFORD CSD':'Milford',
+    'MILFORD EVSD':'Milford',
     'MOUNT HEALTHY CSD':'Cincinnati',
     'NORTH COLLEGE HILL CSD':'Cincinnati',
     'NORWOOD CSD':'Norwood', 
