@@ -2,10 +2,14 @@ import time
 import numpy as np
 from urllib.robotparser import RobotFileParser
 
+import sys
+import selenium
+import selenium.webdriver
+
 # Selenium-related imports
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support.wait import WebDriverWait
 from selenium.common.exceptions import (
     NoSuchElementException,
     ElementClickInterceptedException,
@@ -16,6 +20,13 @@ from selenium.common.exceptions import (
 from hch_scraper.utils.logging_setup import logger
 from hch_scraper.config.settings import form_xpaths_list, XPATHS, URLS
 from hch_scraper.utils.data_extraction.form_helpers.selenium_utils import fill_form_field
+
+
+
+print("DEBUG selenium in navigation.py:")
+print("  sys.executable:", sys.executable)
+print("  selenium.__file__:", selenium.__file__)
+print("  webdriver.__file__:", selenium.webdriver.__file__)
 
 # ----------------------------------------
 # Custom Exception
@@ -39,6 +50,8 @@ def safe_click(
     delay: int = 1, 
     log: bool = True
 ) -> bool:
+    from selenium.webdriver.support.wait import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
     """
     Clicks an element located by its XPath with retries and optional logging.
 

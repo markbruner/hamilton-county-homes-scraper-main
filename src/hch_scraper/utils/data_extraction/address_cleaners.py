@@ -1,18 +1,20 @@
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from typing import Optional, Tuple, List
 
 import pandas as pd
 import usaddress
 from word2number import w2n
 
+import logging
+
 from hch_scraper.config.mappings.street_types import (
     street_suffix_normalization_map,
     direction_normalization_map,
 )
-from hch_scraper.config.mappings.secondary_units import (
-    secondary_unit_normalization_map,
-)
+from hch_scraper.config.mappings.secondary_units import secondary_unit_normalization_map
+
+logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Pre-compiled regexes
@@ -68,6 +70,7 @@ from hch_scraper.config.mappings.secondary_units import (
 HYPHEN_RE   = re.compile(r"\b(\d+)\s*-\s*(\d+)\b")
 FRACTION_RE = re.compile(r"\b(\d+)\s+(\d+)/(\d+)\b")
 ORDINAL_RE  = re.compile(r"\b\d+(?:st|nd|rd|th)\b", re.IGNORECASE)
+RANGE_PREFIX_RE = re.compile(r"^\s*(\d+)\s+(\d+)\s+(.*)$")
 
 EXTRA_INFO_RE = re.compile(
     r"\s*\([A-Za-z]+\)\s*",
@@ -84,7 +87,14 @@ _NUMERIC_RE = re.compile(r"^\d+$")
 class AddressParts:
     ParcelNumber:               Optional[str] = None
     Recipient:                  Optional[str] = None
+
+    # Primary address number (what usaddress sees)
     AddressNumber:              Optional[str] = None
+
+    # Optional range for things like "1308 1310 WILLIAM H TAFT RD"
+    AddressNumberLow:           Optional[str] = None
+    AddressNumberHigh:          Optional[str] = None
+
     AddressNumberPrefix:        Optional[str] = None
     AddressNumberSuffix:        Optional[str] = None
     StreetName:                 Optional[str] = None
@@ -134,6 +144,24 @@ def _preclean(addr: str) -> str:
     s = FRACTION_RE.sub(_collapse_fraction, s)
     return s
 
+def _detect_address_range(addr: str) -> Tuple[Optional[str], Optional[str], str]:
+    """
+    Detects a leading numeric range like '1308 1310 WILLIAM H TAFT RD'.
+
+    Returns:
+        (low, high, addr_for_tagging)
+
+    - low/high are strings or None
+    - addr_for_tagging is what we send to usaddress, e.g. '1308 WILLIAM H TAFT RD'
+    """
+    m = RANGE_PREFIX_RE.match(addr)
+    if not m:
+        return None, None, addr
+
+    low, high, rest = m.groups()
+    # Use the low number as the AddressNumber for parsing:
+    addr_for_tagging = f"{low} {rest}"
+    return low, high, addr_for_tagging
 
 def tag_address(
     row: pd.Series,
@@ -156,8 +184,11 @@ def tag_address(
     addr_clean = _preclean(addr_raw)
     parcel_id = row[parcel_col]
 
+    # Detect space-separated number ranges like "1308 1310 WILLIAM H TAFT RD"
+    low_num, high_num, addr_for_tagging = _detect_address_range(addr_clean)
+
     try:
-        usparsed, _ = usaddress.tag(addr_clean)
+        usparsed, _ = usaddress.tag(addr_for_tagging)
     except usaddress.RepeatedLabelError as err:
         issues.append(f"Repeated label: {err}")
         return None, issues
@@ -169,6 +200,11 @@ def tag_address(
         ParcelNumber               = parcel_id,
         Recipient                  = usparsed.get("Recipient"),
         AddressNumber              = usparsed.get("AddressNumber"),
+
+        # new range fields:
+        AddressNumberLow           = low_num,
+        AddressNumberHigh          = high_num,
+
         AddressNumberPrefix        = usparsed.get("AddressNumberPrefix"),
         AddressNumberSuffix        = usparsed.get("AddressNumberSuffix"),
         StreetName                 = usparsed.get("StreetName"),
@@ -194,6 +230,7 @@ def tag_address(
         StateName                  = usparsed.get("StateName"),
         AddressType                = usparsed.get("AddressType"),
     )
+
     return parts, issues
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -201,46 +238,57 @@ def tag_address(
 # ─────────────────────────────────────────────────────────────────────────────
 
 def normalize_address_parts(parts: AddressParts) -> AddressParts:
-    """
-    Apply USPS-style normalization to a parsed AddressParts:
-    - AddressNumber -> numeric where possible
-    - Directions -> N, S, E, W, NE, etc.
-    - Street suffix -> ST, AVE, RD, ...
-    - Unit type -> APT, STE, UNIT, ...
-    - Street/city/state to upper-case
-    """
-    data = parts.__dict__.copy()
+    data = asdict(parts)
 
-    # House number normalization
-    data["AddressNumber"] = _coerce_address_number(parts.AddressNumber)
+    # Address number
+    new_num = _coerce_address_number(parts.AddressNumber)
+    if new_num != parts.AddressNumber:
+        logger.debug(f"AddressNumber normalized: {parts.AddressNumber} → {new_num}")
+    data["AddressNumber"] = new_num
 
-    # Directions (N, S, E, W...)
+    # Pre-direction
     if parts.StreetNamePreDirectional:
         raw = parts.StreetNamePreDirectional.upper().rstrip(".")
-        data["StreetNamePreDirectional"] = direction_normalization_map.get(raw, raw)
+        normalized = direction_normalization_map.get(raw, raw)
+        if normalized != raw:
+            logger.debug(f"PreDirectional normalized: {raw} → {normalized}")
+        data["StreetNamePreDirectional"] = normalized
+        # Pre-direction
+
+    if parts.StreetName:
+        raw = parts.StreetName.upper()
+        data["StreetName"] = raw
 
     if parts.StreetNamePostDirectional:
         raw = parts.StreetNamePostDirectional.upper().rstrip(".")
-        data["StreetNamePostDirectional"] = direction_normalization_map.get(raw, raw)
+        normalized = direction_normalization_map.get(raw, raw)
+        if normalized != raw:
+            logger.debug(f"PostDirectional normalized: {raw} → {normalized}")
+        data["StreetNamePostDirectional"] = normalized
 
-    # Street Suffix (ST, AVE, RD, etc.)
+    # Suffix
     if parts.StreetNamePostType:
         raw = parts.StreetNamePostType.upper().rstrip(".")
-        data["StreetNamePostType"] = street_suffix_normalization_map.get(raw, raw)
+        normalized = street_suffix_normalization_map.get(raw, raw)
+        if normalized != raw:
+            logger.debug(f"Suffix normalized: {raw} → {normalized}")
+        data["StreetNamePostType"] = normalized
 
-    # Unit type (APT, STE, UNIT)
+    # Unit
     if parts.OccupancyType:
         raw = parts.OccupancyType.upper().rstrip(".")
-        data["OccupancyType"] = secondary_unit_normalization_map.get(raw, raw)
+        normalized = secondary_unit_normalization_map.get(raw, raw)
+        if normalized != raw:
+            logger.debug(f"UnitType normalized: {raw} → {normalized}")
+        data["OccupancyType"] = normalized
 
-    # Normalize street name capitalization
-    if parts.StreetName:
-        data["StreetName"] = parts.StreetName.upper()
-
-    # Normalize city and state
-    if parts.PlaceName:
+    # City/State
+    if parts.PlaceName and parts.PlaceName.upper() != parts.PlaceName:
+        logger.debug(f"City uppercased: {parts.PlaceName} → {parts.PlaceName.upper()}")
         data["PlaceName"] = parts.PlaceName.upper()
-    if parts.StateName:
+
+    if parts.StateName and parts.StateName.upper() != parts.StateName:
+        logger.debug(f"State uppercased: {parts.StateName} → {parts.StateName.upper()}")
         data["StateName"] = parts.StateName.upper()
 
     return AddressParts(**data)

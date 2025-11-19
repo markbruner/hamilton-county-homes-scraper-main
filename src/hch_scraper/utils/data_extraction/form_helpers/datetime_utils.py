@@ -1,17 +1,16 @@
 import re
 import pandas as pd
-from datetime import timedelta, datetime, date
+from datetime import datetime, date
 from typing import List, Tuple, Any, Union
 from dataclasses import dataclass
 
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
-import time
 
 from hch_scraper.utils.logging_setup import logger
 from hch_scraper.config.settings import XPATHS
-from hch_scraper.utils.data_extraction.form_helpers.selenium_utils import get_text, safe_quit
-from hch_scraper.io.navigation import safe_click
+from hch_scraper.utils.data_extraction.form_helpers.selenium_utils import safe_quit
+
 
 @dataclass
 class ModifiedDates:

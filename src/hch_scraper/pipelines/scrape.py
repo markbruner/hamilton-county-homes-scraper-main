@@ -24,7 +24,7 @@ from dataclasses import dataclass
 
 from hch_scraper.utils.logging_setup import logger
 from hch_scraper.config.settings import URLS
-from hch_scraper.drivers.selenium_webdriver import init_driver
+from hch_scraper.drivers.webdrivers import init_driver
 from hch_scraper.io.downloads import get_csv_data
 
 from hch_scraper.io.navigation import initialize_search, check_allowed_webscraping

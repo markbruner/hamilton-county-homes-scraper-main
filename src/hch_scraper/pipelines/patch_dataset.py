@@ -37,7 +37,7 @@ from hch_scraper.services.geocoding import geocode_until_complete
 from hch_scraper.pipelines.fetch_missing_data import patch_data, find_missing_rows
 
 # Selenium driver setup and navigation helpers
-from hch_scraper.drivers.selenium_webdriver import init_driver
+from hch_scraper.drivers.webdrivers import init_driver
 from hch_scraper.io.navigation import safe_click
 
 # Configuration constants
