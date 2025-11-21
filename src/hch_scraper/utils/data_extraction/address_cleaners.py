@@ -196,6 +196,9 @@ def tag_address(
         issues.append(str(err))
         return None, issues
 
+    if (high_num != None) and (int(high_num) - int(low_num) < 0):
+            high_num = None 
+
     parts = AddressParts(
         ParcelNumber               = parcel_id,
         Recipient                  = usparsed.get("Recipient"),
@@ -249,7 +252,8 @@ def normalize_address_parts(parts: AddressParts) -> AddressParts:
     # Pre-direction
     if parts.StreetNamePreDirectional:
         raw = parts.StreetNamePreDirectional.upper().rstrip(".")
-        normalized = direction_normalization_map.get(raw, raw)
+        normalized = direction_normalization_map.get(raw)
+        print(normalized)
         if normalized != raw:
             logger.debug(f"PreDirectional normalized: {raw} → {normalized}")
         data["StreetNamePreDirectional"] = normalized
@@ -261,7 +265,7 @@ def normalize_address_parts(parts: AddressParts) -> AddressParts:
 
     if parts.StreetNamePostDirectional:
         raw = parts.StreetNamePostDirectional.upper().rstrip(".")
-        normalized = direction_normalization_map.get(raw, raw)
+        normalized = direction_normalization_map.get(raw)
         if normalized != raw:
             logger.debug(f"PostDirectional normalized: {raw} → {normalized}")
         data["StreetNamePostDirectional"] = normalized
@@ -269,7 +273,7 @@ def normalize_address_parts(parts: AddressParts) -> AddressParts:
     # Suffix
     if parts.StreetNamePostType:
         raw = parts.StreetNamePostType.upper().rstrip(".")
-        normalized = street_suffix_normalization_map.get(raw, raw)
+        normalized = street_suffix_normalization_map.get(raw)
         if normalized != raw:
             logger.debug(f"Suffix normalized: {raw} → {normalized}")
         data["StreetNamePostType"] = normalized
@@ -277,7 +281,7 @@ def normalize_address_parts(parts: AddressParts) -> AddressParts:
     # Unit
     if parts.OccupancyType:
         raw = parts.OccupancyType.upper().rstrip(".")
-        normalized = secondary_unit_normalization_map.get(raw, raw)
+        normalized = secondary_unit_normalization_map.get(raw)
         if normalized != raw:
             logger.debug(f"UnitType normalized: {raw} → {normalized}")
         data["OccupancyType"] = normalized
@@ -306,7 +310,7 @@ def _collapse_fraction(m: re.Match) -> str:
 def _coerce_address_number(value: Optional[str]) -> Optional[str]:
     """
     Return a strictly numeric house number, or the original value if we
-    can’t make a safe conversion. Handles 'one hundred twenty-three' → '123'.
+    cant make a safe conversion. Handles 'one hundred twenty-three' → '123'.
     """
     if value is not None and HYPHEN_RE.match(value):
         value = HYPHEN_RE.sub(lambda m: m.group(1), value)

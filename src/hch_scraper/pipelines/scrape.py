@@ -257,7 +257,7 @@ def main(robots_txt_allowed: bool, request: ScrapeRequest) -> Tuple[pd.DataFrame
             return pd.DataFrame(), check.dates, driver, check.modified
 
         data = get_csv_data(wait)
-
+        
         logger.info(
             f"Completed scraping for {request.start}–{request.end}: {data.shape[0]} rows."
         )
