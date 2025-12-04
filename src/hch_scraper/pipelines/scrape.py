@@ -17,10 +17,11 @@ To run:
 """
 
 import time
+import os
 import pandas as pd
 from datetime import datetime, date, timedelta
 from typing import Union, List, Tuple
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 
 from hch_scraper.utils.logging_setup import logger
 from hch_scraper.config.settings import URLS
@@ -28,6 +29,7 @@ from hch_scraper.drivers.webdrivers import init_driver
 from hch_scraper.io.downloads import get_csv_data
 
 from hch_scraper.io.navigation import initialize_search, check_allowed_webscraping
+from hch_scraper.utils.data_extraction.address_cleaners import normalize_address_parts,tag_address
 from hch_scraper.utils.data_extraction.form_helpers.selenium_utils import safe_quit
 from hch_scraper.utils.data_extraction.form_helpers.data_formatting import final_csv_conversion
 from hch_scraper.utils.data_extraction.form_helpers.datetime_utils import check_reset_needed
@@ -152,9 +154,26 @@ def _scrape_all_dates(ranges: List[Tuple[str, str]], robots_txt_allowed: bool, s
             if modified:
                 ranges = updated_ranges  # main split the date range; retry
                 break
+            if not os.getenv("HCH_SCRAPER_SKIP_ENRICHER"):
+                all_data, addr_issues = _enrich_addresses(all_data)
             final_csv_conversion(all_data, search_start, search_end)
 
     return all_data_df
+
+def _enrich_addresses(df: pd.DataFrame) -> pd.DataFrame:
+    parsed = []
+    issues = []
+    df.columns = df.columns.str.lower()
+    df.columns = df.columns.str.replace(" ","_")
+    for _, row in df.iterrows():
+        parts, errs = tag_address(row, addr_col="address", parcel_col="parcel_number")
+        issues.extend(errs)
+        if parts:
+            parsed.append(asdict(normalize_address_parts(parts)))
+        else:
+            parsed.append({})
+    enriched = pd.DataFrame(parsed)
+    return pd.concat([df.reset_index(drop=True), enriched], axis=1), issues
 
 def run_scraper_pipeline():
     """
@@ -257,11 +276,12 @@ def main(robots_txt_allowed: bool, request: ScrapeRequest) -> Tuple[pd.DataFrame
             return pd.DataFrame(), check.dates, driver, check.modified
 
         data = get_csv_data(wait)
-        
+
         logger.info(
             f"Completed scraping for {request.start}–{request.end}: {data.shape[0]} rows."
         )
         check.dates.pop(0)
+        print(check.dates)
         return data, check.dates, driver, check.modified
 
     finally:

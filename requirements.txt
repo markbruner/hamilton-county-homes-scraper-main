@@ -9,3 +9,5 @@ pandas
 lxml
 RapidFuzz
 pytest
+word2number
+usaddress

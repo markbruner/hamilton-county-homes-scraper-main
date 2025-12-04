@@ -159,15 +159,18 @@ def _detect_address_range(addr: str) -> Tuple[Optional[str], Optional[str], str]
         return None, None, addr
 
     low, high, rest = m.groups()
-    # Use the low number as the AddressNumber for parsing:
-    addr_for_tagging = f"{low} {rest}"
-    return low, high, addr_for_tagging
+    if int(high)< int(low):
+        return None, None, addr
+    else:
+        # Use the low number as the AddressNumber for parsing:
+        addr_for_tagging = f"{low} {rest}"
+        return low, high, addr_for_tagging
 
 def tag_address(
     row: pd.Series,
     addr_col: str,
     parcel_col: str,
-) -> Tuple[Optional[AddressParts], List[str]]:
+    ) -> Tuple[Optional[AddressParts], List[str]]:
     """
     row         : one DataFrame row (Series)
     addr_col    : name of the address column in that row
@@ -253,7 +256,6 @@ def normalize_address_parts(parts: AddressParts) -> AddressParts:
     if parts.StreetNamePreDirectional:
         raw = parts.StreetNamePreDirectional.upper().rstrip(".")
         normalized = direction_normalization_map.get(raw)
-        print(normalized)
         if normalized != raw:
             logger.debug(f"PreDirectional normalized: {raw} → {normalized}")
         data["StreetNamePreDirectional"] = normalized
