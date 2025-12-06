@@ -18,7 +18,7 @@ def fill_form_field(
     value: str,
     retries: int = 3,
     delay: int = 1,
-    clear_field: bool = True
+    clear_field: bool = True,
 ) -> bool:
     """
     Fills a form field identified by its ID with a given value.
@@ -54,7 +54,9 @@ def fill_form_field(
             logger.info(f"Filled form field '{field_id}' with '{value}'.")
             return True
         except TimeoutException as e:
-            logger.warning(f"[{attempt}/{retries}] Timeout locating field '{field_id}': {e}")
+            logger.warning(
+                f"[{attempt}/{retries}] Timeout locating field '{field_id}': {e}"
+            )
             time.sleep(delay)
         except Exception as e:
             logger.error(f"Error interacting with form field '{field_id}': {e}")
@@ -64,13 +66,7 @@ def fill_form_field(
     return False
 
 
-def get_text(
-    driver,
-    wait,
-    xpath: str,
-    retries: int = 3,
-    delay: int = 1
-) -> str:
+def get_text(driver, wait, xpath: str, retries: int = 3, delay: int = 1) -> str:
     """
     Retrieves and returns the text content from an element located by XPATH.
 
@@ -91,7 +87,9 @@ def get_text(
     for attempt in range(1, retries + 1):
         try:
             element = wait.until(EC.visibility_of_element_located((By.XPATH, xpath)))
-            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
+            driver.execute_script(
+                "arguments[0].scrollIntoView({block: 'center'});", element
+            )
             text = element.text.strip()
             if not text:
                 logger.warning(f"Element at {xpath} exists but contains no text.")
@@ -103,13 +101,17 @@ def get_text(
             logger.error(f"[{attempt}/{retries}] Timeout waiting for {xpath}: {e}")
             time.sleep(delay)
         except StaleElementReferenceException:
-            logger.warning(f"[{attempt}/{retries}] Stale element at {xpath}. Retrying...")
+            logger.warning(
+                f"[{attempt}/{retries}] Stale element at {xpath}. Retrying..."
+            )
             time.sleep(delay)
         except Exception as e:
             logger.error(f"Unexpected error at {xpath}: {e}")
             raise
 
-    raise TimeoutException(f"Failed to retrieve text at {xpath} after {retries} attempts.")
+    raise TimeoutException(
+        f"Failed to retrieve text at {xpath} after {retries} attempts."
+    )
 
 
 def safe_quit(driver) -> None:

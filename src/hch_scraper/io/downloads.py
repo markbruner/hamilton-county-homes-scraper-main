@@ -38,7 +38,7 @@ from hch_scraper.utils.data_extraction.form_helpers.selenium_utils import get_te
 from hch_scraper.utils.data_extraction.table_extraction import (
     scrape_table_by_xpath,
     transform_table,
-    find_click_row
+    find_click_row,
 )
 from hch_scraper.io.navigation import safe_click, next_navigation
 from hch_scraper.utils.data_extraction.form_helpers.file_io import get_file_path
@@ -55,6 +55,7 @@ def download_search_results_csv(wait) -> None:
     - Initiates the browser download of a CSV file containing search results
     """
     safe_click(wait, XPATHS["results"]["download_csv"])
+
 
 def extract_property_details(driver, wait) -> pd.DataFrame:
     """
@@ -83,7 +84,9 @@ def extract_property_details(driver, wait) -> pd.DataFrame:
         parcel_id = parts[1].strip()
 
         # Scrape the appraisal information table via XPath
-        appraisal_table = scrape_table_by_xpath(wait, XPATHS["view"]["appraisal_information"])
+        appraisal_table = scrape_table_by_xpath(
+            wait, XPATHS["view"]["appraisal_information"]
+        )
         if appraisal_table is None or appraisal_table.empty:
             logger.warning(f"Empty appraisal table for parcel {parcel_id}")
             return None
@@ -91,19 +94,26 @@ def extract_property_details(driver, wait) -> pd.DataFrame:
         df = transform_table(appraisal_table)
         columns_to_drop = ["Year Built", "Deed Number", "# of Parcels Sold"]
         df = df.drop([c for c in columns_to_drop if c in df.columns], axis=1)
-        df.rename(columns={
-            "# Bedrooms": "Bedrooms",
-            "# Full Bathrooms": "Full Baths",
-            "# Half Bathrooms": "Half Baths"
-        }, inplace=True)
+        df.rename(
+            columns={
+                "# Bedrooms": "Bedrooms",
+                "# Full Bathrooms": "Full Baths",
+                "# Half Bathrooms": "Half Baths",
+            },
+            inplace=True,
+        )
 
         # Attach metadata columns
         df["parcel_id"] = parcel_id
-        df["school_district"] = get_text(driver, wait, XPATHS["property"]["school_district"], retries=1)
+        df["school_district"] = get_text(
+            driver, wait, XPATHS["property"]["school_district"], retries=1
+        )
         return df
 
     except Exception as e:
-        logger.error(f"Error extracting details for {parcel_id if 'parcel_id' in locals() else 'unknown'}: {e}")
+        logger.error(
+            f"Error extracting details for {parcel_id if 'parcel_id' in locals() else 'unknown'}: {e}"
+        )
         return None
 
 
@@ -175,7 +185,8 @@ def _dt_num_pages(driver) -> int:
     - Integer page count, or None if unavailable
     """
     try:
-        return driver.execute_script("""
+        return driver.execute_script(
+            """
             const $ = window.jQuery;
             if (!$ || !$.fn.dataTable) return null;
             const dt = $('#resultsTable').DataTable();
@@ -196,7 +207,7 @@ def _pagination_li_count(driver) -> int:
     try:
         items = driver.find_elements(
             By.CSS_SELECTOR,
-            "ul.pagination li.paginate_button:not(.next):not(.previous)"
+            "ul.pagination li.paginate_button:not(.next):not(.previous)",
         )
         return len(items) or None
     except Exception:
@@ -212,10 +223,9 @@ def _pages_from_status_text(driver, wait) -> int:
     """
     try:
         status = wait.until(
-            EC.presence_of_element_located((
-                By.XPATH,
-                XPATHS["results"]["search_results_number"]
-            ))
+            EC.presence_of_element_located(
+                (By.XPATH, XPATHS["results"]["search_results_number"])
+            )
         ).text
         match = re.search(r"to\s+(\d+)\s+of\s+([\d,]+)", status)
         if not match:
@@ -259,6 +269,7 @@ def scrape_detail_pages(driver, wait, num_properties: int = 10) -> list:
             break
     return results
 
+
 def get_csv_data(wait, max_wait=30) -> pd.DataFrame:
     """
     Clicks the “Download CSV” link, waits for a non-empty CSV to appear,
@@ -274,8 +285,8 @@ def get_csv_data(wait, max_wait=30) -> pd.DataFrame:
     -------
     pd.DataFrame
     """
-    download_dir = Path(data_storage["raw"]).resolve()     # adjust if different
-    pattern      = download_dir / "search_results*.csv"
+    download_dir = Path(data_storage["raw"]).resolve()  # adjust if different
+    pattern = download_dir / "search_results*.csv"
 
     # Clean slate
     _purge_existing_csvs(pattern)
@@ -300,7 +311,7 @@ def get_csv_data(wait, max_wait=30) -> pd.DataFrame:
 
     if not csv_path:
         logger.error("CSV download timed out; no file found.")
-        return pd.DataFrame()          # or raise, depending on your policy
+        return pd.DataFrame()  # or raise, depending on your policy
 
     # Read
     try:
@@ -316,6 +327,7 @@ def get_csv_data(wait, max_wait=30) -> pd.DataFrame:
     _purge_existing_csvs(pattern)
 
     return df
+
 
 def _purge_existing_csvs(pattern):
     # Removes any .csv files that would keep the scraper from working properly

@@ -45,7 +45,9 @@ from hch_scraper.config.settings import XPATHS, URLS
 from hch_scraper.config.mappings.street_types import street_type_map
 
 # Data formatting helper
-from hch_scraper.utils.data_extraction.form_helpers.data_formatting import clean_and_format_columns
+from hch_scraper.utils.data_extraction.form_helpers.data_formatting import (
+    clean_and_format_columns,
+)
 from hch_scraper.utils.data_extraction.address_cleaners import tag_address, add_zip_code
 
 # File I/O helper
@@ -61,11 +63,13 @@ BASE_DIR = Path(__file__).resolve().parents[3]
 
 # Paths to the raw homes and polygon CSVs
 homes_path = get_file_path(BASE_DIR, "raw/home_sales", "homes_01012003_12312003.csv")
-zipcode_path=get_file_path(BASE_DIR, 'raw/downloads', "Countywide_Zip_Codes.csv")
-polygon_geojson_path = get_file_path(BASE_DIR, "raw/downloads", "Hamilton_County_Parcel_Polygons.geojson")
+zipcode_path = get_file_path(BASE_DIR, "raw/downloads", "Countywide_Zip_Codes.csv")
+polygon_geojson_path = get_file_path(
+    BASE_DIR, "raw/downloads", "Hamilton_County_Parcel_Polygons.geojson"
+)
 
 # Base URL for the auditor’s site
-BASE_URL = URLS['base']
+BASE_URL = URLS["base"]
 
 # -----------------------------------------------------------------------------
 # Main patching routine
@@ -77,11 +81,11 @@ if __name__ == "__main__":
 
     # 2. Read in existing CSV of all homes and polygons
     homes = pd.read_csv(homes_path)
-    homes['parcel_number'] = homes['parcel_number'].str.replace('-','').str.strip()
+    homes["parcel_number"] = homes["parcel_number"].str.replace("-", "").str.strip()
     zipcodes = pd.read_csv(zipcode_path)
 
     polygons = gpd.read_file(polygon_geojson_path)
-    polygons = polygons.to_crs(epsg=3735) 
+    polygons = polygons.to_crs(epsg=3735)
     polygons["centroid"] = polygons.geometry.centroid
     polygons["geometry"] = polygons.geometry
     # Compute centroids
@@ -89,60 +93,62 @@ if __name__ == "__main__":
     polygons["lon"] = centroids_ll.geometry.x
     polygons["lat"] = centroids_ll.geometry.y
 
-
     keep_cols = [
-        "AUDPTYID",        # parcel key (will rename to parcel_number)
-        "CONVEY_NO",       # conveyance number
-        "DEEDNO",          # deed identifier
-        "ACREDEED",        # acreage
-        "SCHOOL_CODE_DIS", # school district code/description
-        "MKTLND",          # market land value
-        "MKTIMP",          # market improvement value
-        "MKT_TOTAL_VAL",   # total market value
-        "ANNUAL_TAXES",    # annual taxes
-        "FRONT_FOOTAGE",   # frontage length
-        "SHAPEAREA",       # parcel area
-        "SHAPELEN",        # parcel perimeter/length
+        "AUDPTYID",  # parcel key (will rename to parcel_number)
+        "CONVEY_NO",  # conveyance number
+        "DEEDNO",  # deed identifier
+        "ACREDEED",  # acreage
+        "SCHOOL_CODE_DIS",  # school district code/description
+        "MKTLND",  # market land value
+        "MKTIMP",  # market improvement value
+        "MKT_TOTAL_VAL",  # total market value
+        "ANNUAL_TAXES",  # annual taxes
+        "FRONT_FOOTAGE",  # frontage length
+        "SHAPEAREA",  # parcel area
+        "SHAPELEN",  # parcel perimeter/length
         "geometry",
         "centroid",
         "lon",
         "lat",
     ]
 
-    polygons = polygons[keep_cols].rename(columns={"AUDPTYID":'parcel_number'})
-    polygons['parcel_number'] = polygons['parcel_number'].astype('str').str.strip()
+    polygons = polygons[keep_cols].rename(columns={"AUDPTYID": "parcel_number"})
+    polygons["parcel_number"] = polygons["parcel_number"].astype("str").str.strip()
     merged = homes.merge(polygons, on="parcel_number", how="left")
 
     # Storing the merged columns in order to remove the columns created from geocoding longitude and latitude.
     final_cols = merged.columns.to_list()
 
+    logger.info(
+        "Beginning replacing of the street type (i.e. dr, rd, way, etc...) with the new mapping."
+    )
+    pattern = r"\b(" + "|".join(map(re.escape, street_type_map.keys())) + r")\b"
+    merged["address"] = merged["address"].str.replace(
+        pattern, lambda m: street_type_map[m.group(0)], regex=True
+    )
 
-    logger.info("Beginning replacing of the street type (i.e. dr, rd, way, etc...) with the new mapping.")    
-    pattern = r'\b(' + '|'.join(map(re.escape, street_type_map.keys())) + r')\b'
-    merged['address'] = merged['address'].str.replace(
-                            pattern,
-                            lambda m: street_type_map[m.group(0)],
-                            regex=True
-                        )
-    
-        # Address processing
+    # Address processing
     logger.info("Processing address columns for geocoding.")
     address_parts = [
-    {**tag_address(address), 'parcel_number': parcel}
-    for parcel, address in zip(merged.parcel_number, merged.address)
+        {**tag_address(address), "parcel_number": parcel}
+        for parcel, address in zip(merged.parcel_number, merged.address)
     ]
 
     address_df = pd.DataFrame.from_dict(address_parts)
     address_df = address_df.drop_duplicates().dropna()
-    merged = merged.merge(address_df, on='parcel_number',how='left')
+    merged = merged.merge(address_df, on="parcel_number", how="left")
 
     merged = add_zip_code(merged)
 
-    merged['postal_code'] = merged['postal_code'].astype('str')
-    zipcodes['ZIPCODE'] = zipcodes['ZIPCODE'].astype('str')
+    merged["postal_code"] = merged["postal_code"].astype("str")
+    zipcodes["ZIPCODE"] = zipcodes["ZIPCODE"].astype("str")
 
-    merged = (merged.merge(zipcodes[['ZIPCODE','USPSCITY', 'state']], left_on='postal_code', right_on='ZIPCODE', how='left')
-              .rename(columns={'USPSCITY':'city'}))
+    merged = merged.merge(
+        zipcodes[["ZIPCODE", "USPSCITY", "state"]],
+        left_on="postal_code",
+        right_on="ZIPCODE",
+        how="left",
+    ).rename(columns={"USPSCITY": "city"})
 
     merged["new_address"] = (
         merged["st_num"]
@@ -155,10 +161,10 @@ if __name__ == "__main__":
         .str.strip()
     )
 
-    final_cols.append('city')    
-    final_cols.append('state')
-    final_cols.append('postal_code')
-    merged = merged[~merged['parcel_number'].isna()]
+    final_cols.append("city")
+    final_cols.append("state")
+    final_cols.append("postal_code")
+    merged = merged[~merged["parcel_number"].isna()]
 
     merged = geocode_until_complete(merged)
     merged = merged[final_cols]
@@ -171,7 +177,7 @@ if __name__ == "__main__":
     missing_ids, missing_dates = find_missing_rows(merged)
 
     # 5. Prepare output file path
-    output_path = homes_path.with_name('homes_all_patched.csv')
+    output_path = homes_path.with_name("homes_all_patched.csv")
 
     # 6. Loop over each parcel with missing data
     for missing_id, transfer_date in zip(missing_ids, missing_dates):
@@ -179,9 +185,8 @@ if __name__ == "__main__":
         property_info_table = patch_data(wait, driver, missing_id)
 
         # Build a boolean mask for the exact row to update
-        mask = (
-            (merged['parcel_number'] == missing_id) &
-            (merged['transfer_date'] == transfer_date)
+        mask = (merged["parcel_number"] == missing_id) & (
+            merged["transfer_date"] == transfer_date
         )
 
         # Ensure it’s a DataFrame (patch_data may return dict-like)

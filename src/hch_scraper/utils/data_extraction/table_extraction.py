@@ -15,6 +15,7 @@ from hch_scraper.utils.logging_setup import logger
 # Table Extraction & Interaction Helpers
 # -------------------------------------
 
+
 def scrape_table_by_xpath(wait: WebDriverWait, xpath: str) -> pd.DataFrame:
     """
     Extracts the first HTML table found at the specified XPath and returns it as a DataFrame.
@@ -26,7 +27,7 @@ def scrape_table_by_xpath(wait: WebDriverWait, xpath: str) -> pd.DataFrame:
     Returns:
         pd.DataFrame: Parsed table data if successful, otherwise an empty DataFrame.
 
-    Logs: 
+    Logs:
         - Errors if the table is not found or cannot be parsed.
     """
     if not xpath:
@@ -34,17 +35,21 @@ def scrape_table_by_xpath(wait: WebDriverWait, xpath: str) -> pd.DataFrame:
         return pd.DataFrame()
 
     try:
-        html = wait.until(EC.visibility_of_element_located((By.XPATH, xpath))).get_attribute("outerHTML")
+        html = wait.until(
+            EC.visibility_of_element_located((By.XPATH, xpath))
+        ).get_attribute("outerHTML")
         return pd.read_html(StringIO(html))[0]
     except TimeoutException as e:
         logger.error(f"Table at {xpath} not found: {e}")
     except ValueError as e:
         logger.error(f"Failed to parse table at {xpath}: {e}")
-    
+
     return pd.DataFrame()
 
 
-def scroll_and_click(driver: WebDriver, wait: WebDriverWait, element: WebElement) -> None:
+def scroll_and_click(
+    driver: WebDriver, wait: WebDriverWait, element: WebElement
+) -> None:
     """
     Scrolls to a specified web element and attempts to click it. Falls back to JavaScript click if needed.
 
@@ -102,7 +107,7 @@ def transform_table(table: pd.DataFrame) -> pd.DataFrame:
     if table.empty:
         logger.warning("Received an empty table for transformation.")
         return pd.DataFrame()
-    
+
     table = table.T.reset_index(drop=True)
     table.columns = table.iloc[0, :]
     table = table.drop(0, axis=0)

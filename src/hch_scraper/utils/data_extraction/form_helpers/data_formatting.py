@@ -5,14 +5,17 @@ from typing import List, Tuple, Dict
 
 from hch_scraper.utils.logging_setup import logger
 
-from hch_scraper.utils.data_extraction.form_helpers.file_io import get_file_path, save_to_csv
+from hch_scraper.utils.data_extraction.form_helpers.file_io import (
+    get_file_path,
+    save_to_csv,
+)
 
 
 def format_column_name(
     name: str,
-    to_lower: bool = True, 
-    strip_underscores: bool = False, 
-    prefix: str = None
+    to_lower: bool = True,
+    strip_underscores: bool = False,
+    prefix: str = None,
 ) -> str:
     """
     Formats a column name by replacing spaces with underscores, removing special characters,
@@ -33,11 +36,11 @@ def format_column_name(
     if not isinstance(name, str) or not name:
         logger.error(f"Invalid column name: {name}")
         raise ValueError("Column name must be a non-empty string")
-    
+
     # Replace spaces and remove special characters
     name = name.replace(" ", "_")
     name = re.sub(r"[^A-Za-z0-9_]+", "", name)
-    
+
     # Apply transformations
     if to_lower:
         name = name.lower()
@@ -45,15 +48,15 @@ def format_column_name(
         name = name.strip("_")
     if prefix:
         name = f"{prefix}_{name}"
-    
+
     return name
 
 
 def final_csv_conversion(
     all_data_df: pd.DataFrame,
-    start_date : str,
-    end_date : str,
-) -> Dict[pd.DataFrame,pd.DataFrame]:
+    start_date: str,
+    end_date: str,
+) -> Dict[pd.DataFrame, pd.DataFrame]:
     """
     Cleans and saves home sales data to CSV files.
 
@@ -72,18 +75,23 @@ def final_csv_conversion(
     df = all_data_df
 
     logger.info(f"Beginning cleaning and formatting data of {df.shape[0]} rows.")
-    df = clean_and_format_columns(df, ["last_transfer_date", "last_sale_amount", "parcel_id"])
-    
+    df = clean_and_format_columns(
+        df, ["last_transfer_date", "last_sale_amount", "parcel_id"]
+    )
+
     df = df.drop_duplicates()
-    start_date_clean = start_date.replace("/",'')
-    end_date_clean = end_date.replace("/",'')
+    start_date_clean = start_date.replace("/", "")
+    end_date_clean = end_date.replace("/", "")
 
     # Save CSV files
-    homes_csv_path = get_file_path(".", "raw/home_sales", f"homes_{start_date_clean}_{end_date_clean}.csv")
+    homes_csv_path = get_file_path(
+        ".", "raw/home_sales", f"homes_{start_date_clean}_{end_date_clean}.csv"
+    )
     all_homes_csv_path = get_file_path(".", "raw/home_sales", "homes_all.csv")
     save_to_csv(df, homes_csv_path)
     save_to_csv(df, all_homes_csv_path)
-    
+
+
 def clean_and_format_columns(df: pd.DataFrame, drop_cols: List[str]) -> pd.DataFrame:
     """
     Formats and cleans DataFrame column names, and removes specified columns if present.

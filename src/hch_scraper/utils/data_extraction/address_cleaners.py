@@ -20,9 +20,9 @@ logger = logging.getLogger(__name__)
 # Pre-compiled regexes
 # ─────────────────────────────────────────────────────────────────────────────
 
-HYPHEN_RE   = re.compile(r"\b(\d+)\s*-\s*(\d+)\b")
+HYPHEN_RE = re.compile(r"\b(\d+)\s*-\s*(\d+)\b")
 FRACTION_RE = re.compile(r"\b(\d+)\s+(\d+)/(\d+)\b")
-ORDINAL_RE  = re.compile(r"\b\d+(?:st|nd|rd|th)\b", re.IGNORECASE)
+ORDINAL_RE = re.compile(r"\b\d+(?:st|nd|rd|th)\b", re.IGNORECASE)
 
 EXTRA_INFO_RE = re.compile(
     r"\s*\([A-Za-z]+\)\s*",
@@ -41,7 +41,7 @@ centerline and ZIP code datasets.
 Key Features:
 - Parses raw addresses into structured components using NLP.
 
-"""       
+"""
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Dataclass for parsed addresses
@@ -67,9 +67,9 @@ from hch_scraper.config.mappings.secondary_units import (
 # Pre-compiled regexes
 # ─────────────────────────────────────────────────────────────────────────────
 
-HYPHEN_RE   = re.compile(r"\b(\d+)\s*-\s*(\d+)\b")
+HYPHEN_RE = re.compile(r"\b(\d+)\s*-\s*(\d+)\b")
 FRACTION_RE = re.compile(r"\b(\d+)\s+(\d+)/(\d+)\b")
-ORDINAL_RE  = re.compile(r"\b\d+(?:st|nd|rd|th)\b", re.IGNORECASE)
+ORDINAL_RE = re.compile(r"\b\d+(?:st|nd|rd|th)\b", re.IGNORECASE)
 RANGE_PREFIX_RE = re.compile(r"^\s*(\d+)\s+(\d+)\s+(.*)$")
 
 EXTRA_INFO_RE = re.compile(
@@ -83,42 +83,43 @@ _NUMERIC_RE = re.compile(r"^\d+$")
 # Dataclass for parsed addresses
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @dataclass(slots=True, frozen=True)
 class AddressParts:
-    ParcelNumber:               Optional[str] = None
-    Recipient:                  Optional[str] = None
+    ParcelNumber: Optional[str] = None
+    Recipient: Optional[str] = None
 
     # Primary address number (what usaddress sees)
-    AddressNumber:              Optional[str] = None
+    AddressNumber: Optional[str] = None
 
     # Optional range for things like "1308 1310 WILLIAM H TAFT RD"
-    AddressNumberLow:           Optional[str] = None
-    AddressNumberHigh:          Optional[str] = None
+    AddressNumberLow: Optional[str] = None
+    AddressNumberHigh: Optional[str] = None
 
-    AddressNumberPrefix:        Optional[str] = None
-    AddressNumberSuffix:        Optional[str] = None
-    StreetName:                 Optional[str] = None
-    StreetNamePreDirectional:   Optional[str] = None
-    StreetNamePreModifier:      Optional[str] = None
-    StreetNamePreType:          Optional[str] = None
-    StreetNamePostDirectional:  Optional[str] = None
-    StreetNamePostModifier:     Optional[str] = None
-    StreetNamePostType:         Optional[str] = None
-    CornerOf:                   Optional[str] = None
-    IntersectionSeparator:      Optional[str] = None
-    LandmarkName:               Optional[str] = None
-    USPSBoxGroupID:             Optional[str] = None
-    USPSBoxGroupType:           Optional[str] = None
-    USPSUSPSBoxID:              Optional[str] = None
-    USPSBoxType:                Optional[str] = None
-    BuildingName:               Optional[str] = None
-    OccupancyType:              Optional[str] = None
-    OccupancyIdentifier:        Optional[str] = None
-    SubaddressIdentifier:       Optional[str] = None
-    SubaddressType:             Optional[str] = None
-    PlaceName:                  Optional[str] = None
-    StateName:                  Optional[str] = None
-    AddressType:                Optional[str] = None
+    AddressNumberPrefix: Optional[str] = None
+    AddressNumberSuffix: Optional[str] = None
+    StreetName: Optional[str] = None
+    StreetNamePreDirectional: Optional[str] = None
+    StreetNamePreModifier: Optional[str] = None
+    StreetNamePreType: Optional[str] = None
+    StreetNamePostDirectional: Optional[str] = None
+    StreetNamePostModifier: Optional[str] = None
+    StreetNamePostType: Optional[str] = None
+    CornerOf: Optional[str] = None
+    IntersectionSeparator: Optional[str] = None
+    LandmarkName: Optional[str] = None
+    USPSBoxGroupID: Optional[str] = None
+    USPSBoxGroupType: Optional[str] = None
+    USPSUSPSBoxID: Optional[str] = None
+    USPSBoxType: Optional[str] = None
+    BuildingName: Optional[str] = None
+    OccupancyType: Optional[str] = None
+    OccupancyIdentifier: Optional[str] = None
+    SubaddressIdentifier: Optional[str] = None
+    SubaddressType: Optional[str] = None
+    PlaceName: Optional[str] = None
+    StateName: Optional[str] = None
+    AddressType: Optional[str] = None
 
 
 EMPTY_PARSE = AddressParts()  # optional convenience
@@ -126,6 +127,7 @@ EMPTY_PARSE = AddressParts()  # optional convenience
 # ─────────────────────────────────────────────────────────────────────────────
 # Pre-clean + tagging
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _preclean(addr: str) -> str:
     """
@@ -144,6 +146,7 @@ def _preclean(addr: str) -> str:
     s = FRACTION_RE.sub(_collapse_fraction, s)
     return s
 
+
 def _detect_address_range(addr: str) -> Tuple[Optional[str], Optional[str], str]:
     """
     Detects a leading numeric range like '1308 1310 WILLIAM H TAFT RD'.
@@ -159,18 +162,19 @@ def _detect_address_range(addr: str) -> Tuple[Optional[str], Optional[str], str]
         return None, None, addr
 
     low, high, rest = m.groups()
-    if int(high)< int(low):
+    if int(high) < int(low):
         return None, None, addr
     else:
         # Use the low number as the AddressNumber for parsing:
         addr_for_tagging = f"{low} {rest}"
         return low, high, addr_for_tagging
 
+
 def tag_address(
     row: pd.Series,
     addr_col: str,
     parcel_col: str,
-    ) -> Tuple[Optional[AddressParts], List[str]]:
+) -> Tuple[Optional[AddressParts], List[str]]:
     """
     row         : one DataFrame row (Series)
     addr_col    : name of the address column in that row
@@ -200,48 +204,48 @@ def tag_address(
         return None, issues
 
     if (high_num != None) and (int(high_num) - int(low_num) < 0):
-            high_num = None 
+        high_num = None
 
     parts = AddressParts(
-        ParcelNumber               = parcel_id,
-        Recipient                  = usparsed.get("Recipient"),
-        AddressNumber              = usparsed.get("AddressNumber"),
-
+        ParcelNumber=parcel_id,
+        Recipient=usparsed.get("Recipient"),
+        AddressNumber=usparsed.get("AddressNumber"),
         # new range fields:
-        AddressNumberLow           = low_num,
-        AddressNumberHigh          = high_num,
-
-        AddressNumberPrefix        = usparsed.get("AddressNumberPrefix"),
-        AddressNumberSuffix        = usparsed.get("AddressNumberSuffix"),
-        StreetName                 = usparsed.get("StreetName"),
-        StreetNamePreDirectional   = usparsed.get("StreetNamePreDirectional"),
-        StreetNamePreModifier      = usparsed.get("StreetNamePreModifier"),
-        StreetNamePreType          = usparsed.get("StreetNamePreType"),
-        StreetNamePostDirectional  = usparsed.get("StreetNamePostDirectional"),
-        StreetNamePostModifier     = usparsed.get("StreetNamePostModifier"),
-        StreetNamePostType         = usparsed.get("StreetNamePostType"),
-        CornerOf                   = usparsed.get("CornerOf"),
-        IntersectionSeparator      = usparsed.get("IntersectionSeparator"),
-        LandmarkName               = usparsed.get("LandmarkName"),
-        USPSBoxGroupID             = usparsed.get("USPSBoxGroupID"),
-        USPSBoxGroupType           = usparsed.get("USPSBoxGroupType"),
-        USPSUSPSBoxID              = usparsed.get("USPSUSPSBoxID"),
-        USPSBoxType                = usparsed.get("USPSBoxType"),
-        BuildingName               = usparsed.get("BuildingName"),
-        OccupancyType              = usparsed.get("OccupancyType"),
-        OccupancyIdentifier        = usparsed.get("OccupancyIdentifier"),
-        SubaddressIdentifier       = usparsed.get("SubaddressIdentifier"),
-        SubaddressType             = usparsed.get("SubaddressType"),
-        PlaceName                  = usparsed.get("PlaceName"),
-        StateName                  = usparsed.get("StateName"),
-        AddressType                = usparsed.get("AddressType"),
+        AddressNumberLow=low_num,
+        AddressNumberHigh=high_num,
+        AddressNumberPrefix=usparsed.get("AddressNumberPrefix"),
+        AddressNumberSuffix=usparsed.get("AddressNumberSuffix"),
+        StreetName=usparsed.get("StreetName"),
+        StreetNamePreDirectional=usparsed.get("StreetNamePreDirectional"),
+        StreetNamePreModifier=usparsed.get("StreetNamePreModifier"),
+        StreetNamePreType=usparsed.get("StreetNamePreType"),
+        StreetNamePostDirectional=usparsed.get("StreetNamePostDirectional"),
+        StreetNamePostModifier=usparsed.get("StreetNamePostModifier"),
+        StreetNamePostType=usparsed.get("StreetNamePostType"),
+        CornerOf=usparsed.get("CornerOf"),
+        IntersectionSeparator=usparsed.get("IntersectionSeparator"),
+        LandmarkName=usparsed.get("LandmarkName"),
+        USPSBoxGroupID=usparsed.get("USPSBoxGroupID"),
+        USPSBoxGroupType=usparsed.get("USPSBoxGroupType"),
+        USPSUSPSBoxID=usparsed.get("USPSUSPSBoxID"),
+        USPSBoxType=usparsed.get("USPSBoxType"),
+        BuildingName=usparsed.get("BuildingName"),
+        OccupancyType=usparsed.get("OccupancyType"),
+        OccupancyIdentifier=usparsed.get("OccupancyIdentifier"),
+        SubaddressIdentifier=usparsed.get("SubaddressIdentifier"),
+        SubaddressType=usparsed.get("SubaddressType"),
+        PlaceName=usparsed.get("PlaceName"),
+        StateName=usparsed.get("StateName"),
+        AddressType=usparsed.get("AddressType"),
     )
 
     return parts, issues
 
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Normalization (USPS abbreviations, numeric house number, etc.)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def normalize_address_parts(parts: AddressParts) -> AddressParts:
     data = asdict(parts)
@@ -299,13 +303,15 @@ def normalize_address_parts(parts: AddressParts) -> AddressParts:
 
     return AddressParts(**data)
 
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _collapse_fraction(m: re.Match) -> str:
     whole, num, den = m.groups()
-    value = int(whole) + int(num) / int(den)      # 915 + 1/2 → 915.5
+    value = int(whole) + int(num) / int(den)  # 915 + 1/2 → 915.5
     return f"{value:g}".rstrip(".")
 
 

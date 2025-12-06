@@ -19,8 +19,9 @@ from selenium.common.exceptions import (
 
 from hch_scraper.utils.logging_setup import logger
 from hch_scraper.config.settings import form_xpaths_list, XPATHS, URLS
-from hch_scraper.utils.data_extraction.form_helpers.selenium_utils import fill_form_field
-
+from hch_scraper.utils.data_extraction.form_helpers.selenium_utils import (
+    fill_form_field,
+)
 
 
 print("DEBUG selenium in navigation.py:")
@@ -32,26 +33,27 @@ print("  webdriver.__file__:", selenium.webdriver.__file__)
 # Custom Exception
 # ----------------------------------------
 
+
 class SafeClickError(Exception):
     """
     Custom exception raised when an element fails to be clicked
     after a defined number of retry attempts using `safe_click`.
     """
+
     pass
+
 
 # ----------------------------------------
 # Web Interaction Utilities
 # ----------------------------------------
 
+
 def safe_click(
-    wait: WebDriverWait,
-    xpath: str, 
-    retries: int = 3, 
-    delay: int = 1, 
-    log: bool = True
+    wait: WebDriverWait, xpath: str, retries: int = 3, delay: int = 1, log: bool = True
 ) -> bool:
     from selenium.webdriver.support.wait import WebDriverWait
     from selenium.webdriver.support import expected_conditions as EC
+
     """
     Clicks an element located by its XPath with retries and optional logging.
 
@@ -90,7 +92,10 @@ def safe_click(
 
     if log:
         logger.error(f"Failed to click element at {xpath} after {retries} attempts.")
-    raise SafeClickError(f"Failed to click element at {xpath} after {retries} attempts.")
+    raise SafeClickError(
+        f"Failed to click element at {xpath} after {retries} attempts."
+    )
+
 
 def next_navigation(driver, wait: WebDriverWait, xpath: str) -> bool:
     """
@@ -112,6 +117,7 @@ def next_navigation(driver, wait: WebDriverWait, xpath: str) -> bool:
         return False
     except NoSuchElementException:
         return False
+
 
 def initialize_search(wait: WebDriverWait, start: str, end: str) -> None:
     """
@@ -136,6 +142,7 @@ def initialize_search(wait: WebDriverWait, start: str, end: str) -> None:
     for xpath in form_xpaths_list:
         safe_click(wait, xpath)
 
+
 def check_allowed_webscraping(driver) -> bool:
     """
     Validates whether web scraping is allowed for the site based on `robots.txt`.
@@ -150,8 +157,8 @@ def check_allowed_webscraping(driver) -> bool:
         - Parses the site's `robots.txt` file.
         - Quits the driver and logs if scraping is disallowed.
     """
-    ROBOTS_TXT_URL = URLS['robots']
-    BASE_URL = URLS['base']
+    ROBOTS_TXT_URL = URLS["robots"]
+    BASE_URL = URLS["base"]
 
     rp = RobotFileParser()
     rp.set_url(ROBOTS_TXT_URL)

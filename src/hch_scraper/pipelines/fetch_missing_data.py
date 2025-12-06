@@ -12,6 +12,7 @@ Functions:
         Performs a lookup by parcel ID, extracts the patched details,
         then resets the search form for the next query.
 """
+
 from typing import List, Tuple
 import pandas as pd
 import numpy as np
@@ -20,7 +21,10 @@ from hch_scraper.config.settings import XPATHS
 from hch_scraper.utils.logging_setup import logger
 from hch_scraper.io.downloads import scrape_table_by_xpath
 from hch_scraper.io.navigation import safe_click
-from hch_scraper.utils.data_extraction.form_helpers.selenium_utils import fill_form_field, get_text
+from hch_scraper.utils.data_extraction.form_helpers.selenium_utils import (
+    fill_form_field,
+    get_text,
+)
 from hch_scraper.utils.data_extraction.table_extraction import transform_table
 
 
@@ -45,15 +49,23 @@ def find_missing_rows(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
               to those same rows.
     """
     # Filter rows where any of the required columns is null
-    key_cols = ["ACREDEED", "SCHOOL_CODE_DIS", "MKTLND","MKTIMP","MKT_TOTAL_VAL","ANNUAL_TAXES"]
+    key_cols = [
+        "ACREDEED",
+        "SCHOOL_CODE_DIS",
+        "MKTLND",
+        "MKTIMP",
+        "MKT_TOTAL_VAL",
+        "ANNUAL_TAXES",
+    ]
 
     mask = df[key_cols].isnull().any(axis=1)
 
     # Extract the parcel numbers and transfer dates for those rows
-    parcel_numbers = df.loc[mask, 'parcel_number'].to_list()
-    transfer_dates = df.loc[mask, 'transfer_date'].to_list()
+    parcel_numbers = df.loc[mask, "parcel_number"].to_list()
+    transfer_dates = df.loc[mask, "transfer_date"].to_list()
 
     return parcel_numbers, transfer_dates
+
 
 def extract_patched_property_details(driver, id, wait):
     """
@@ -78,14 +90,12 @@ def extract_patched_property_details(driver, id, wait):
         if id == np.nan:
             logger.warning(f"Parcel ID is {id}.")
             return None
-        
+
         # 1. Scrape the appraisal table for this parcel
         appraisal_table = scrape_table_by_xpath(
             wait, XPATHS["view"]["appraisal_information"]
         )
-        tax_table = scrape_table_by_xpath(
-            wait, XPATHS["view"]["tax_summary"]
-        )
+        tax_table = scrape_table_by_xpath(wait, XPATHS["view"]["tax_summary"])
 
         # 2. Bail out if no data found
         if appraisal_table is None or appraisal_table.empty:
@@ -95,14 +105,16 @@ def extract_patched_property_details(driver, id, wait):
         if tax_table is None or tax_table.empty:
             logger.warning(f"Tax table is empty for parcel {id}.")
             return None
-        
+
         # 3. Normalize the table structure
         appraisal_table = transform_table(appraisal_table)
         tax_table = transform_table(tax_table)
 
         # 4. Drop columns we don’t need
         appraisal_keep_cols = ["Conveyance Number", "Deed Number", "Acreage"]
-        appraisal_drop_list = [c for c in appraisal_keep_cols if c not in appraisal_table.columns]
+        appraisal_drop_list = [
+            c for c in appraisal_keep_cols if c not in appraisal_table.columns
+        ]
         appraisal_table.drop(appraisal_drop_list, axis=1, inplace=True)
 
         appraisal_table["parcel_number"] = id
@@ -113,23 +125,31 @@ def extract_patched_property_details(driver, id, wait):
             driver, wait, XPATHS["property"]["annual_tax"]
         )
 
-        tax_keep_cols = ["Market Land Value", "Market Improvement Value", "Market Total Value"]
+        tax_keep_cols = [
+            "Market Land Value",
+            "Market Improvement Value",
+            "Market Total Value",
+        ]
         tax_drop_list = [c for c in tax_keep_cols if c not in tax_table.columns]
         tax_table.drop(tax_drop_list, axis=1, inplace=True)
 
         tax_table["parcel_number"] = id
 
-        parcel_info = appraisal_table.merge(tax_table, on='parcel_number')
+        parcel_info = appraisal_table.merge(tax_table, on="parcel_number")
 
         # 5. Rename numeric count columns for clarity
-        parcel_info.rename({
-        "Conveyance Number":"CONVEY_NO",
-        "Deed Number":"DEEDNO",          
-        "Acreage":"ACREDEED",     
-        "Market Land Value":"MKTLND", 
-        "Market Improvement Value":"MKTIMP",         
-        "Market Total Value":"MKT_TOTAL_VAL", 
-        }, axis=1, inplace=True)
+        parcel_info.rename(
+            {
+                "Conveyance Number": "CONVEY_NO",
+                "Deed Number": "DEEDNO",
+                "Acreage": "ACREDEED",
+                "Market Land Value": "MKTLND",
+                "Market Improvement Value": "MKTIMP",
+                "Market Total Value": "MKT_TOTAL_VAL",
+            },
+            axis=1,
+            inplace=True,
+        )
 
         return parcel_info
 
