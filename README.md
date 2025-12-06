@@ -26,7 +26,7 @@ hamilton-county-homes-scraper-main/
     ├── requirements.txt 
     └── README.md
 ---
-
+---
 ## 🚀 Getting Started
 
 ### 1. Clone the Repo
