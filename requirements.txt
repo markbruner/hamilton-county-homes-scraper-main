@@ -1,3 +1,6 @@
+black
+ruff
+pyright
 selenium
 PyYAML
 requests

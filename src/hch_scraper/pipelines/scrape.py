@@ -20,7 +20,7 @@ import time
 import os
 import pandas as pd
 from datetime import datetime, date, timedelta
-from typing import Union, List, Tuple
+from typing import List, Tuple
 from dataclasses import dataclass, asdict
 
 from hch_scraper.utils.logging_setup import logger

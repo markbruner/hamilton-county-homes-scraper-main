@@ -44,26 +44,6 @@ Key Features:
 """
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Dataclass for parsed addresses
-# ─────────────────────────────────────────────────────────────────────────────
-
-import re
-from dataclasses import dataclass
-from typing import Optional, Tuple, List
-
-import pandas as pd
-import usaddress
-from word2number import w2n
-
-from hch_scraper.config.mappings.street_types import (
-    street_suffix_normalization_map,
-    direction_normalization_map,
-)
-from hch_scraper.config.mappings.secondary_units import (
-    secondary_unit_normalization_map,
-)
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Pre-compiled regexes
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -203,7 +183,7 @@ def tag_address(
         issues.append(str(err))
         return None, issues
 
-    if (high_num != None) and (int(high_num) - int(low_num) < 0):
+    if (high_num is not None) and (int(high_num) - int(low_num) < 0):
         high_num = None
 
     parts = AddressParts(

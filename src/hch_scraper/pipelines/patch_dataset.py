@@ -24,7 +24,6 @@ from pathlib import Path
 import re
 
 import pandas as pd
-import numpy as np
 import geopandas as gpd
 
 # Logging
@@ -44,10 +43,6 @@ from hch_scraper.io.navigation import safe_click
 from hch_scraper.config.settings import XPATHS, URLS
 from hch_scraper.config.mappings.street_types import street_type_map
 
-# Data formatting helper
-from hch_scraper.utils.data_extraction.form_helpers.data_formatting import (
-    clean_and_format_columns,
-)
 from hch_scraper.utils.data_extraction.address_cleaners import tag_address, add_zip_code
 
 # File I/O helper
