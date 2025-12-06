@@ -19,7 +19,6 @@ from pathlib import Path
 
 from selenium import webdriver
 from selenium.webdriver.support.wait import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import WebDriverException, TimeoutException
 
 from hch_scraper.utils.logging_setup import logger
@@ -48,7 +47,7 @@ def is_valid_url(url: str) -> bool:
 def init_driver(
     base_url: str,
     driver_type: str = "firefox",
-    headless: bool = False,
+    headless: bool = True,
     max_retries: int = MAX_RETRIES,
     timeout: int = TIMEOUT,
 ) -> tuple:
