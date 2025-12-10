@@ -4,23 +4,23 @@ on:
   schedule:
     # Runs every day at 6:30 AM America/New_York
     # GitHub cron is in UTC → 6:30 AM ET = 11:30 UTC (standard time)
-    - cron: "30 11 * * *"
+    - cron: "00 6 * * *"
   workflow_dispatch:  # allow manual runs from the Actions tab
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
 
+    # prevent overlapping runs
+    concurrency:
+      group: daily-hch-scrape
+      cancel-in-progress: false
+
     env:
       # Supabase secrets
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      # Any other envs your scraper expects, e.g.:
-      # HCH_SCRAPER_LOG_LEVEL: INFO
-      
-      concurrency:
-        group: daily-hch-scrape
-        cancel-in-progress: false
+
 
     steps:
       - name: Check out repo
@@ -39,6 +39,5 @@ jobs:
 
       - name: Run scraper
         run: |
-          # if your package layout is src/hch_scraper/...
           export PYTHONPATH="$PYTHONPATH:${GITHUB_WORKSPACE}/src"
           python -m hch_scraper.pipelines.daily_scraper

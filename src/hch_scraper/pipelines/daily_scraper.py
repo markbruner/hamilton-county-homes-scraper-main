@@ -153,6 +153,8 @@ def _scrape_all_dates(
             # Convert everything to object and replace non-finite values with None
             all_data = all_data.astype(object)
             all_data = all_data.replace({np.nan: None, np.inf: None, -np.inf: None})
+            all_data.columns = all_data.columns.str.lower()
+            all_data.columns = all_data.columns.str.replace(" ","_")
             upsert_sales_raw(df=all_data,
                              supabase=supabase,
                              schema_name="public",
