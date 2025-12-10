@@ -28,8 +28,9 @@ load_dotenv()
 API_KEY = os.getenv("API_KEY")
 
 # API endpoint and cache location
-BASE_API_URL = URLS['geocoding_api']
+BASE_API_URL = URLS["geocoding_api"]
 CACHE_PATH = "data/processed/geocode_cache.json"
+
 
 # Load cache from disk if it exists
 def load_cache_from_disk(filepath=CACHE_PATH) -> dict:
@@ -47,6 +48,7 @@ def load_cache_from_disk(filepath=CACHE_PATH) -> dict:
             return json.load(f)
     return {}
 
+
 # Save updated cache to disk
 def save_cache_to_disk(cache: dict, filepath=CACHE_PATH):
     """
@@ -59,8 +61,10 @@ def save_cache_to_disk(cache: dict, filepath=CACHE_PATH):
     with open(filepath, "w") as f:
         json.dump(cache, f)
 
+
 # In-memory cache
 geocode_cache = load_cache_from_disk()
+
 
 def get_geocodes(address: str, parcel_number: str) -> dict:
     """
@@ -76,26 +80,32 @@ def get_geocodes(address: str, parcel_number: str) -> dict:
     if parcel_number in geocode_cache:
         return geocode_cache[parcel_number]
 
-    conn = http.client.HTTPConnection('api.positionstack.com')
-    params = urllib.parse.urlencode({
-        "access_key": API_KEY,
-        "query": address,
-        "region": "Ohio",
-        "country": "US",
-        "limit": 1
-    })
+    conn = http.client.HTTPConnection("api.positionstack.com")
+    params = urllib.parse.urlencode(
+        {
+            "access_key": API_KEY,
+            "query": address,
+            "region": "Ohio",
+            "country": "US",
+            "limit": 1,
+        }
+    )
 
     try:
-        conn.request('GET', f'/v1/forward?{params}')
+        conn.request("GET", f"/v1/forward?{params}")
         resp = conn.getresponse()
         data = resp.read()
         conn.close()
-        logger.debug(data.decode('utf-8'))
-        data = json.loads(data.decode('utf-8'))
+        logger.debug(data.decode("utf-8"))
+        data = json.loads(data.decode("utf-8"))
 
-        if data.get('data'):
-            hit = data['data'][0]
-            city = hit.get("locality") or hit.get("administrative_area") or hit.get("county")
+        if data.get("data"):
+            hit = data["data"][0]
+            city = (
+                hit.get("locality")
+                or hit.get("administrative_area")
+                or hit.get("county")
+            )
             state = hit.get("region_code") or hit.get("region")
             geocode = {
                 "formatted_address": f"{hit.get('name')}, {city}, {state} {hit.get('postal_code')}",
@@ -110,62 +120,90 @@ def get_geocodes(address: str, parcel_number: str) -> dict:
                 "confidence": hit.get("confidence"),
             }
         else:
-            geocode = {k: None for k in [
-                "formatted_address", "longitude", "latitude", "house_num", "street_name",
-                "api_city", "county", "api_state", "api_postal_code", "confidence"
-            ]}
+            geocode = {
+                k: None
+                for k in [
+                    "formatted_address",
+                    "longitude",
+                    "latitude",
+                    "house_num",
+                    "street_name",
+                    "api_city",
+                    "county",
+                    "api_state",
+                    "api_postal_code",
+                    "confidence",
+                ]
+            }
     except Exception as e:
         logger.warning(f"Geocoding error for parcel {parcel_number}: {e}")
-        geocode = {k: None for k in [
-            "formatted_address", "longitude", "latitude", "house_num", "street_name",
-            "api_city", "county", "api_state", "api_postal_code", "confidence"
-        ]}
+        geocode = {
+            k: None
+            for k in [
+                "formatted_address",
+                "longitude",
+                "latitude",
+                "house_num",
+                "street_name",
+                "api_city",
+                "county",
+                "api_state",
+                "api_postal_code",
+                "confidence",
+            ]
+        }
 
     # Save result to in-memory cache
     geocode_cache[parcel_number] = geocode
     return geocode
 
-def geocode_until_complete(final_df: pd.DataFrame, batchsize: int = 10) -> pd.DataFrame:
+
+def geocode_until_complete(df: pd.DataFrame, batchsize: int = 10) -> pd.DataFrame:
     """
     Iteratively geocode rows in the DataFrame that lack latitude/longitude,
     using PositionStack and a persistent cache.
 
     Args:
-        final_df (pd.DataFrame): The DataFrame containing 'parcel_number' and 'new_address'.
+        df (pd.DataFrame): The DataFrame containing 'parcel_number' and 'new_address'.
         batchsize (int): Number of parcels to geocode in each batch.
 
     Returns:
         pd.DataFrame: The enriched DataFrame with geocoded columns filled in.
     """
-    logger.info(f"Starting geocoding loop on {final_df.shape[0]} rows")
-
-    if "parcel_number" not in final_df.columns:
-        final_df = final_df.rename(columns={"Parcel Number": "parcel_number"})
+    logger.info(f"Starting geocoding loop on {df.shape[0]} rows")
 
     stall_counter = 0
-    while final_df["latitude"].isna().any() or final_df["longitude"].isna().any():
-        before = final_df["latitude"].isna().sum()
-        to_geocode = final_df[final_df["latitude"].isna() | final_df["longitude"].isna()]
+    while df["lat"].isna().any() or df["lon"].isna().any():
+        before = df["lat"].isna().sum()
+        to_geocode = df[df["lat"].isna() | df["lon"].isna()]
         home_dict = dict(zip(to_geocode["parcel_number"], to_geocode["new_address"]))
         logger.info(f"Remaining to geocode: {len(home_dict)} parcels.")
 
         keys = list(home_dict.keys())
         for i in range(0, len(keys), batchsize):
-            batch_keys = keys[i: i + batchsize]
+            batch_keys = keys[i : i + batchsize]
             for parcel_number in batch_keys:
                 address = home_dict[parcel_number]
                 try:
                     geo = get_geocodes(address, parcel_number)
-                    sel = final_df["parcel_number"] == parcel_number
+                    sel = df["parcel_number"] == parcel_number
                     cols = [
-                        "formatted_address", "longitude", "latitude", "house_num", "street_name",
-                        "api_city", "county", "api_state", "api_postal_code", "confidence"
+                        "formatted_address",
+                        "lon",
+                        "lat",
+                        "house_num",
+                        "street_name",
+                        "api_city",
+                        "county",
+                        "api_state",
+                        "api_postal_code",
+                        "confidence",
                     ]
-                    final_df.loc[sel, cols] = [geo[col] for col in cols]
+                    df.loc[sel, cols] = [geo[col] for col in cols]
                 except Exception as e:
                     logger.warning(f"Failed to geocode parcel {parcel_number}: {e}")
 
-        after = final_df["latitude"].isna().sum()
+        after = df["lat"].isna().sum()
         if after == before:
             stall_counter += 1
             if stall_counter >= 2:
@@ -176,4 +214,4 @@ def geocode_until_complete(final_df: pd.DataFrame, batchsize: int = 10) -> pd.Da
 
     save_cache_to_disk(geocode_cache)
     logger.info("Geocoding loop completed")
-    return final_df
+    return df

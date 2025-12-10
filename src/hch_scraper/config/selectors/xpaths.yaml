@@ -3,7 +3,8 @@
 base_url: 'https://www.hamiltoncountyauditor.org/'
 
 search:
-  property_search: '//*[@id="leftFrontPage"]/a[1]'
+  # property_search: '//*[@id="leftFrontPage"]/a[1]'
+  property_search: '//*[@id="depts"]/div/div[1]/div[1]'
 
   # The radio button to select to search by sales. 
   parcel_id: '//*[@id="search_radio_parcel_id"]'
@@ -19,6 +20,7 @@ results:
   search_results_number: '//*[@id="search-results_info"]'
   number_pages: '//*[@id="search-results_paginate"]/span/a[6]'
   download_csv: '//*[@id="ajaxDiv"]/div/div[2]/div[2]/a[2]/span'
+  last_page: '//*[@id="search-results_paginate"]/span/a[6]'
   
   first_results_table_page: '//*[@id="search-results_paginate"]/span/a[1]'
   first_row_results_table: '//*[@id="search-results"]/tbody/tr[1]'
@@ -39,6 +41,6 @@ property:
 view:
   property_summary: '//*[@id="parcel-tabs"]/a[1]'
   appraisal_information: '//*[@id="property_overview_wrapper"]/table[1]'
-  tax_distributions_page: '//*[@id="tax-credit-value-summary"]'
+  tax_summary: '//*[@id="tax-credit-value-summary"]'
   transfer_tab: '//*[@id="parcel-tabs"]/a[4]'
   transfer_table: '/html/body/div/div[3]/div[2]/table'

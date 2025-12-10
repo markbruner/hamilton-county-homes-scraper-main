@@ -5,7 +5,7 @@ This module provides helper functions to initialize a Selenium WebDriver
 (Firefox or Chrome) with configurable retry logic, download preferences,
 timeout settings, and headless execution.
 
-Primary use case: initializing a browser session to begin scraping from a 
+Primary use case: initializing a browser session to begin scraping from a
 valid URL, with support for automatic file downloading.
 
 Usage:
@@ -18,7 +18,7 @@ from urllib.parse import urlparse
 from pathlib import Path
 
 from selenium import webdriver
-from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support.wait import WebDriverWait
 from selenium.common.exceptions import WebDriverException, TimeoutException
 
 from hch_scraper.utils.logging_setup import logger
@@ -26,8 +26,8 @@ from hch_scraper.utils.data_extraction.form_helpers.selenium_utils import safe_q
 from hch_scraper.config.settings import SCRAPING_CONFIG, data_storage
 
 # Constants from configuration
-MAX_RETRIES = SCRAPING_CONFIG['retry_limit']
-TIMEOUT = SCRAPING_CONFIG['page_load_timeout']
+MAX_RETRIES = SCRAPING_CONFIG["retry_limit"]
+TIMEOUT = SCRAPING_CONFIG["page_load_timeout"]
 
 
 def is_valid_url(url: str) -> bool:
@@ -49,7 +49,7 @@ def init_driver(
     driver_type: str = "firefox",
     headless: bool = True,
     max_retries: int = MAX_RETRIES,
-    timeout: int = TIMEOUT
+    timeout: int = TIMEOUT,
 ) -> tuple:
     """
     Initializes a Selenium WebDriver (Firefox or Chrome) with retries,
@@ -82,27 +82,29 @@ def init_driver(
             if driver_type.lower() == "firefox":
                 options = webdriver.FirefoxOptions()
                 if headless:
-                    options.add_argument('--headless')
+                    options.add_argument("--headless")
 
                 # Set Firefox download preferences
-                options.set_preference('browser.download.folderList', 2)
-                options.set_preference('browser.download.dir', str(download_dir))
-                options.set_preference('browser.helperApps.neverAsk.saveToDisk', 'text/csv,application/csv')
+                options.set_preference("browser.download.folderList", 2)
+                options.set_preference("browser.download.dir", str(download_dir))
+                options.set_preference(
+                    "browser.helperApps.neverAsk.saveToDisk", "text/csv,application/csv"
+                )
 
                 driver = webdriver.Firefox(options=options)
 
             elif driver_type.lower() == "chrome":
                 options = webdriver.ChromeOptions()
                 if headless:
-                    options.add_argument('--headless')
+                    options.add_argument("--headless")
 
                 # Set Chrome download preferences
                 prefs = {
-                    'download.default_directory': str(download_dir),
-                    'download.prompt_for_download': False,
-                    'safebrowsing.enabled': True,
+                    "download.default_directory": str(download_dir),
+                    "download.prompt_for_download": False,
+                    "safebrowsing.enabled": True,
                 }
-                options.add_experimental_option('prefs', prefs)
+                options.add_experimental_option("prefs", prefs)
 
                 driver = webdriver.Chrome(options=options)
 

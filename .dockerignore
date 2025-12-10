@@ -1,0 +1,66 @@
+# -------------------------
+# Python + build artifacts
+# -------------------------
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.whl
+*.egg-info/
+*.egg
+
+# -------------------------
+# Virtual environments
+# -------------------------
+venv/
+.venv/
+
+# -------------------------
+# Environment files (NEVER send these to Docker)
+# -------------------------
+.env
+.env.*
+
+# -------------------------
+# Jupyter notebooks, checkpoints
+# -------------------------
+notebooks/
+.ipynb_checkpoints/
+
+# -------------------------
+# Local logs and cache
+# -------------------------
+logs/
+*.log
+pytest_cache/
+.pytest_cache/
+
+# -------------------------
+# Data (local data is usually large and not needed in built images)
+# -------------------------
+docs/
+data/
+
+# -------------------------
+# Git files
+# -------------------------
+.git
+.gitignore
+
+# -------------------------
+# VS Code & project metadata
+# -------------------------
+.vscode/
+*.code-workspace
+
+# -------------------------
+# Build directories
+# -------------------------
+build/
+dist/
+htmlcov/
+
+# -------------------------
+# Ignore anything in scripts/ if it's only for local testing
+# -------------------------
+scripts/

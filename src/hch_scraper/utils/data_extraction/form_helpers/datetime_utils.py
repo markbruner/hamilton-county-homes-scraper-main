@@ -1,6 +1,6 @@
 import re
 import pandas as pd
-from datetime import timedelta, datetime, date
+from datetime import datetime, date
 from typing import List, Tuple, Any, Union
 from dataclasses import dataclass
 
@@ -9,12 +9,14 @@ from selenium.webdriver.common.by import By
 
 from hch_scraper.utils.logging_setup import logger
 from hch_scraper.config.settings import XPATHS
-from hch_scraper.utils.data_extraction.form_helpers.selenium_utils import get_text, safe_quit
+from hch_scraper.utils.data_extraction.form_helpers.selenium_utils import safe_quit
+
 
 @dataclass
 class ModifiedDates:
     updated_dates: List[Tuple[datetime, datetime]]
     modified: bool
+
 
 @dataclass
 class CheckReset:
@@ -23,11 +25,12 @@ class CheckReset:
     dates: List[Tuple[datetime, datetime]]
     total_entries: int
 
+
 def update_date_range_and_append(
     dates: List[Tuple[datetime, datetime]],
     old_date: datetime,
     new_date: datetime,
-    additional_slice: Tuple[datetime, datetime]
+    additional_slice: Tuple[datetime, datetime],
 ) -> ModifiedDates:
     """
     Replaces a specific end date in a date range with a new date and adds a new time slice immediately after it.
@@ -46,14 +49,18 @@ def update_date_range_and_append(
         ValueError: If `additional_slice` is not a (start, end) tuple.
     """
     # Validate inputs
-    if not isinstance(dates, list) or not all(isinstance(d, tuple) and len(d) == 2 for d in dates):
-        logger.error(f"Dates must be a list of tuples with start and end dates. The dates in the list are: {dates}")
+    if not isinstance(dates, list) or not all(
+        isinstance(d, tuple) and len(d) == 2 for d in dates
+    ):
+        logger.error(
+            f"Dates must be a list of tuples with start and end dates. The dates in the list are: {dates}"
+        )
         raise ValueError("Dates must be a list of tuples with start and end dates.")
     if not isinstance(additional_slice, tuple) or len(additional_slice) != 2:
         logger.error("Additional slice must be a tuple with two elements (start, end).")
         raise ValueError("Invalid additional slice format")
-    
-    old_date = _ensure_datetime(old_date,"old date")
+
+    old_date = _ensure_datetime(old_date, "old date")
     new_date = _ensure_datetime(new_date, "new date")
 
     updated_dates = dates.copy()
@@ -70,30 +77,38 @@ def update_date_range_and_append(
             new_date = _format_date_string(new_date)
             updated_dates[i] = (start, new_date)
             # Insert the additional time slice
-            updated_dates.insert(i + 1, additional_slice)
+            additional_slice_str = (
+                additional_slice[0].strftime("%m/%d/%Y"),
+                additional_slice[1].strftime("%m/%d/%Y"),
+            )
+            updated_dates.insert(i + 1, additional_slice_str)
+
             modified = True
-            logger.info(f"Replaced {old_date} with {new_date} and added new slice {additional_slice}.")
+            logger.info(
+                f"Replaced {old_date} with {new_date} and added new slice {additional_slice_str}."
+            )
             break
 
     if not modified:
-        logger.warning(f"Old date {old_date} not found in any date range. No modifications made.")
+        logger.warning(
+            f"Old date {old_date} not found in any date range. No modifications made."
+        )
 
-    return ModifiedDates(
-        updated_dates=updated_dates,
-        modified=modified
-    )
+    return ModifiedDates(updated_dates=updated_dates, modified=modified)
+
 
 def _format_date_string(dt: Union[date, datetime]) -> str:
     if not isinstance(dt, (datetime, date)):
         raise ValueError(f"Expected a datetime or date object, got {type(dt).__name__}")
     return dt.strftime("%m/%d/%Y")
 
+
 def check_reset_needed(
     driver: object,
     wait: object,
     start: str,
     end: str,
-    dates: List[Tuple[datetime, datetime]]
+    dates: List[Tuple[datetime, datetime]],
 ) -> CheckReset:
     """
     Checks if the search needs to be reset due to 1000 entries and updates the time slice.
@@ -126,7 +141,7 @@ def check_reset_needed(
                         (By.XPATH, XPATHS["results"]["search_results_number"])
                     )
                 )
-                raw_text = elem.text                      # "Showing 1 to 10 of 121 entries"
+                raw_text = elem.text  # "Showing 1 to 10 of 121 entries"
                 # robust regex: look for "of <number> entries"
                 m = re.search(r"of\s+([\d,]+)\s+entries", raw_text, re.I)
                 if m:
@@ -139,41 +154,37 @@ def check_reset_needed(
                 total_entries = None
 
     except Exception as e:
-        raise ValueError(f"Failed to extract number of entries: {e}")   
+        raise ValueError(f"Failed to extract number of entries: {e}")
 
     if total_entries >= 1000:
-        logger.info(f"Entries = {total_entries} for {start} to {end}. Splitting dates further since the entries are greater than or equal to the threshold of 1000.")
+        logger.info(
+            f"Entries = {total_entries} for {start} to {end}. Splitting dates further since the entries are greater than or equal to the threshold of 1000."
+        )
 
         # Calculating the midpoint of the start and end date
         midpoint = start_dt + (end_dt - start_dt) / 2
 
         # Creating the new time slice
-        new_slice = (midpoint + timedelta(days=1), end_dt)
-        
-        # Updating the list of dates        
-        updated_dates, modified = update_date_range_and_append(
-            dates,
-            end_dt,
-            midpoint,
-            new_slice
-        )
-        
+        new_slice = (midpoint, end_dt)
+
+        # Updating the list of dates
+        updated_dates = update_date_range_and_append(dates, end_dt, midpoint, new_slice)
+
         return CheckReset(
-        reset_needed=True, 
-        modified=modified,
-        dates=updated_dates,
-        total_entries=total_entries
+            reset_needed=True,
+            modified=updated_dates.modified,
+            dates=updated_dates.updated_dates,
+            total_entries=total_entries,
         )
-    
+
     if total_entries < 1:
-        logger.warning(f"Search parameters between {start_dt} and {end_dt} yielded no results. Moving to next date range.")
+        logger.warning(
+            f"Search parameters between {start_dt} and {end_dt} yielded no results. Moving to next date range."
+        )
         safe_quit(driver)
 
     return CheckReset(
-    reset_needed=False, 
-    modified=False,
-    dates=dates,
-    total_entries=total_entries
+        reset_needed=False, modified=False, dates=dates, total_entries=total_entries
     )
 
 
@@ -186,19 +197,22 @@ def _ensure_datetime(value: Any, description: str = "date") -> datetime:
         logger.error(f"Invalid {description}: {value}. Error: {e}")
         raise ValueError(f"Invalid {description}: {value}")
 
+
 def _get_dt_record_count(driver):
     """
     Return the total row count reported by DataTables, or None if
     jQuery/DataTables isn’t present yet.
     """
     try:
-        return driver.execute_script("""
+        return driver.execute_script(
+            """
             const $ = window.jQuery;
             if (!$ || !$.fn.dataTable) return null;
 
             // Adjust '#resultsTable' if your table uses a different id
             const table = $('#resultsTable').DataTable();
             return table ? table.page.info().recordsDisplay : null;
-        """)
+        """
+        )
     except Exception:
         return None
