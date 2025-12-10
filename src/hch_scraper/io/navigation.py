@@ -1,5 +1,4 @@
 import time
-import numpy as np
 from urllib.robotparser import RobotFileParser
 
 import sys
@@ -8,7 +7,6 @@ import selenium.webdriver
 
 # Selenium-related imports
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.common.exceptions import (
     NoSuchElementException,
@@ -51,7 +49,6 @@ class SafeClickError(Exception):
 def safe_click(
     wait: WebDriverWait, xpath: str, retries: int = 3, delay: int = 1, log: bool = True
 ) -> bool:
-    from selenium.webdriver.support.wait import WebDriverWait
     from selenium.webdriver.support import expected_conditions as EC
 
     """

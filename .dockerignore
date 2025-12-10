@@ -38,9 +38,8 @@ pytest_cache/
 # -------------------------
 # Data (local data is usually large and not needed in built images)
 # -------------------------
-data/
 docs/
-
+data/
 
 # -------------------------
 # Git files

@@ -1,0 +1,44 @@
+name: Daily Hamilton County Scrape
+
+on:
+  schedule:
+    # Runs every day at 6:30 AM America/New_York
+    # GitHub cron is in UTC → 6:30 AM ET = 11:30 UTC (standard time)
+    - cron: "30 11 * * *"
+  workflow_dispatch:  # allow manual runs from the Actions tab
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+
+    env:
+      # Supabase secrets
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # Any other envs your scraper expects, e.g.:
+      # HCH_SCRAPER_LOG_LEVEL: INFO
+      
+      concurrency:
+        group: daily-hch-scrape
+        cancel-in-progress: false
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run scraper
+        run: |
+          # if your package layout is src/hch_scraper/...
+          export PYTHONPATH="$PYTHONPATH:${GITHUB_WORKSPACE}/src"
+          python -m hch_scraper.pipelines.daily_scraper

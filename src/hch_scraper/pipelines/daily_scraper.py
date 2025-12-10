@@ -25,6 +25,7 @@ from dataclasses import dataclass, asdict
 from dotenv import load_dotenv
 import numpy as np
 from supabase import create_client, Client
+import zoneinfo
 
 from hch_scraper.utils.logging_setup import logger
 from hch_scraper.config.settings import URLS
@@ -36,12 +37,9 @@ from hch_scraper.utils.data_extraction.address_cleaners import (
     normalize_address_parts,
     tag_address,
 )
-from hch_scraper.io.supabase_client import get_supabase_client
 from hch_scraper.io.ingestion import upsert_sales_raw
 from hch_scraper.utils.data_extraction.form_helpers.selenium_utils import safe_quit
-from hch_scraper.utils.data_extraction.form_helpers.data_formatting import (
-    final_csv_conversion,
-)
+
 from hch_scraper.utils.data_extraction.form_helpers.datetime_utils import (
     check_reset_needed,
 )
@@ -60,6 +58,20 @@ class Dates:
     start_date: date
     end_date: date
 
+@dataclass
+class ScrapeRequest:
+    """
+    Represents a single scrape request input.
+
+    Args:
+        start (str): Start date in MM/DD/YYYY format.
+        end (str): End date in MM/DD/YYYY format.
+        ranges (List[Tuple[str, str]]): The list of date ranges to scrape.
+    """
+
+    start: str
+    end: str
+    ranges: List[Tuple[str, str]]
 
 @dataclass
 class ScraperResult:
@@ -80,55 +92,8 @@ class ScraperResult:
     final_end: str
 
 
-@dataclass
-class ScrapeRequest:
-    """
-    Represents a single scrape request input.
-
-    Args:
-        start (str): Start date in MM/DD/YYYY format.
-        end (str): End date in MM/DD/YYYY format.
-        ranges (List[Tuple[str, str]]): The list of date ranges to scrape.
-    """
-
-    start: str
-    end: str
-    ranges: List[Tuple[str, str]]
-
-
-def get_user_input() -> Dates:
-    """
-    Prompts the user to enter a start and end date, and constructs a date range between them.
-
-    Returns:
-        Dates: A dataclass containing start date, end date, and the range of years.
-    """
-    start_date = _ask_date("Enter the start date")
-    end_date = _ask_date("Enter the end date")
-    return Dates(start_date, end_date)
-
-
-def _ask_date(prompt: str) -> date:
-    """
-    Continuously prompts the user until a valid date is entered in MM/DD/YYYY format.
-
-    Args:
-        prompt (str): The prompt to display to the user.
-
-    Returns:
-        date: A `datetime.date` object parsed from the user's input.
-    """
-    while True:
-        s = input(f"{prompt} (MM/DD/YYYY): ")
-        try:
-            dt = datetime.strptime(s, "%m/%d/%Y")
-            return dt.date()
-        except ValueError:
-            print("↳ Invalid date format. Please use MM/DD/YYYY.")
-
-
 def run_scraper_for_dates(
-    dates: Dates, robots_txt_allowed: bool
+    dates: datetime, robots_txt_allowed: bool
 ) -> ScraperResult:
     """
     Runs the scraper for a single year within the specified date range.
@@ -140,19 +105,12 @@ def run_scraper_for_dates(
     Returns:
         ScraperResult: Structured result containing scraped data and metadata.
     """
-    yesterday = datetime.now()
-    formatted_start = _format_date(yesterday.start_date)
-    formatted_end = _format_date(yesterday.end_date)
+    formatted_start = _format_date(dates.start_date)
+    formatted_end = _format_date(dates.end_date)
     ranges = _initialize_ranges(formatted_start, formatted_end)
 
-    data = _scrape_all_dates(ranges, robots_txt_allowed, formatted_start, formatted_end)
+    _scrape_all_dates(ranges, robots_txt_allowed, formatted_start, formatted_end)
 
-    return ScraperResult(
-        data=data,
-        remaining_ranges=ranges,
-        final_start=formatted_start,
-        final_end=formatted_end,
-    )
 
 
 def _scrape_all_dates(
@@ -168,7 +126,10 @@ def _scrape_all_dates(
     Returns:
         pd.DataFrame: Combined DataFrame of all scraped data.
     """
-    all_data_df = pd.DataFrame()
+    SUPABASE_URL = os.environ["SUPABASE_URL"]
+    SUPABASE_SERVICE_ROLE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+    supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+
     while ranges[:]:
         for start, end in ranges[:]:
             logger.info(f"Scraping from {start} to {end}")
@@ -192,31 +153,11 @@ def _scrape_all_dates(
             # Convert everything to object and replace non-finite values with None
             all_data = all_data.astype(object)
             all_data = all_data.replace({np.nan: None, np.inf: None, -np.inf: None})
-        
-            expected_cols = [
-                "parcel_number",
-                "address",
-                "bbb",
-                "finsqft",
-                "use",
-                "year_built",
-                "transfer_date",
-                "amount",
-            ]
-            
-            data_sub = all_data[expected_cols].copy()
-            SUPABASE_URL = os.environ["SUPABASE_URL"]
-            SUPABASE_SERVICE_ROLE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
-            print("Using Supabase key starting with:", SUPABASE_SERVICE_ROLE_KEY[:8])
-
-            supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-            upsert_sales_raw(df=data_sub,
+            upsert_sales_raw(df=all_data,
                              supabase=supabase,
                              schema_name="public",
                              table_name="sales_hamilton")
-                
-            final_csv_conversion(all_data, search_start, search_end)
-    return all_data_df
+    
 
 
 def _enrich_addresses(df: pd.DataFrame) -> pd.DataFrame:
@@ -242,7 +183,9 @@ def run_scraper_pipeline():
     Prompts the user for a date range, checks robots.txt permission,
     and runs the scraper for each date in the specified range.
     """
-    dates = get_user_input()
+    tz = zoneinfo.ZoneInfo("America/New_York")
+    yesterday = (datetime.now(tz) - timedelta(days=1)).date()
+    dates = Dates(yesterday, yesterday)
     driver, wait = init_driver(URLS["base"])
 
     try:
@@ -251,20 +194,6 @@ def run_scraper_pipeline():
         safe_quit(driver)
 
     run_scraper_for_dates(dates, robots_txt_allowed)
-
-
-def _consolidate_data(existing: pd.DataFrame, new_data: pd.DataFrame) -> pd.DataFrame:
-    """
-    Concatenates new scraped data into the existing DataFrame.
-
-    Args:
-        existing (pd.DataFrame): Existing DataFrame.
-        new_data (pd.DataFrame): New data to append.
-
-    Returns:
-        pd.DataFrame: Consolidated DataFrame.
-    """
-    return pd.concat([existing, new_data], axis=0).reset_index(drop=True)
 
 
 def _format_date(dt: date) -> str:

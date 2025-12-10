@@ -1,7 +1,6 @@
 import re
 import pandas as pd
-import numpy as np
-from typing import List, Tuple, Dict
+from typing import List, Dict
 
 from hch_scraper.utils.logging_setup import logger
 

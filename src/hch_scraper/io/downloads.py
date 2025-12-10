@@ -20,7 +20,12 @@ Modules:
 
 Configuration, logging, and XPATH settings are imported from hch_scraper utilities.
 """
-import glob, os, time, random, re, math
+import glob
+import os
+import time
+import random
+import re
+import math
 import pandas as pd
 from pathlib import Path
 
@@ -41,7 +46,6 @@ from hch_scraper.utils.data_extraction.table_extraction import (
     find_click_row,
 )
 from hch_scraper.io.navigation import safe_click, next_navigation
-from hch_scraper.utils.data_extraction.form_helpers.file_io import get_file_path
 
 
 def download_search_results_csv(wait) -> None:
