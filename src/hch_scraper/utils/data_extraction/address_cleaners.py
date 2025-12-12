@@ -127,7 +127,7 @@ def _preclean(addr: str) -> str:
     return s
 
 
-def _detect_address_range(addr: str) -> Tuple[Optional[str], Optional[str], str]:
+def _detect_address_range(addr: str):
     """
     Detects a leading numeric range like '1308 1310 WILLIAM H TAFT RD'.
 
@@ -139,17 +139,26 @@ def _detect_address_range(addr: str) -> Tuple[Optional[str], Optional[str], str]
     """
     m = RANGE_PREFIX_RE.match(addr)
     if not m:
-        return None, None, addr
+        print(m)
+        return None, None, addr, None
 
     low, high, rest = m.groups()
-    if int(high) < int(low):
-        return None, None, addr
-    else:
-        # Use the low number as the AddressNumber for parsing:
+
+    low_i, high_i = int(low), int(high)
+
+    diff = abs(high_i - low_i)
+    # Case 2: plausible address range
+    if diff <= 200:
         addr_for_tagging = f"{low} {rest}"
-        return low, high, addr_for_tagging
+        return low, high, addr_for_tagging, "range"
+    
+    if diff > 200 and high_i <= 6000:  # heuristic: reasonable unit size
+        addr_for_tagging = f"{low} {rest} UNIT {high}"
+        return low, None, addr_for_tagging, "unit"
 
-
+    elif diff > 200:
+        return None, None, addr, "unknown"
+    
 def tag_address(
     row: pd.Series,
     addr_col: str,
@@ -172,7 +181,7 @@ def tag_address(
     parcel_id = row[parcel_col]
 
     # Detect space-separated number ranges like "1308 1310 WILLIAM H TAFT RD"
-    low_num, high_num, addr_for_tagging = _detect_address_range(addr_clean)
+    low_num, high_num, addr_for_tagging, address_rng_type = _detect_address_range(addr_clean)
 
     try:
         usparsed, _ = usaddress.tag(addr_for_tagging)
@@ -185,6 +194,7 @@ def tag_address(
 
     if (high_num is not None) and (int(high_num) - int(low_num) < 0):
         high_num = None
+    
 
     parts = AddressParts(
         ParcelNumber=parcel_id,
@@ -217,6 +227,8 @@ def tag_address(
         PlaceName=usparsed.get("PlaceName"),
         StateName=usparsed.get("StateName"),
         AddressType=usparsed.get("AddressType"),
+        address_range_type = address_rng_type,
+
     )
 
     return parts, issues
