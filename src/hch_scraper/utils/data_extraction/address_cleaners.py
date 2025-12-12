@@ -100,6 +100,7 @@ class AddressParts:
     PlaceName: Optional[str] = None
     StateName: Optional[str] = None
     AddressType: Optional[str] = None
+    address_range_type: Optional[str] = None
 
 
 EMPTY_PARSE = AddressParts()  # optional convenience
