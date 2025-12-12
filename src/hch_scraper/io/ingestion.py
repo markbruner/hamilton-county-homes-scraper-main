@@ -35,15 +35,21 @@ def upsert_sales_raw(
 
     records: List[dict] = df.to_dict(orient="records")
 
+    before = len(records)
+    deduped = {}
     for r in records:
-        r["record_key"] = make_record_key(r)
+        deduped[r["record_key"]] = make_record_key(r)
+    
+    records = list(deduped.values())
+    after = len(records)
+    
+    if after < before:
+        print(f"Dropped {before-after} duplicate record_key rows before upsert.")
 
     total = 0
     for start in range(0, len(records), batch_size):
         chunk = records[start : start + batch_size]
 
-        # You can use insert or upsert, depending on whether you want de-duplication.
-        # Here we use upsert; you must set a unique constraint on the table for it to work well.
         response = (
             supabase
             .schema(schema_name)
