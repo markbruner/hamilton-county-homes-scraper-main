@@ -5,6 +5,7 @@ from typing import List
 import pandas as pd
 from supabase import Client
 
+from hch_scraper.loaders.supabase_loader import make_record_key
 
 def upsert_sales_raw(
     df: pd.DataFrame,
@@ -34,7 +35,9 @@ def upsert_sales_raw(
 
     records: List[dict] = df.to_dict(orient="records")
 
-    # Insert in batches
+    for r in records:
+        r["record_key"] = make_record_key(r)
+
     total = 0
     for start in range(0, len(records), batch_size):
         chunk = records[start : start + batch_size]
@@ -42,7 +45,11 @@ def upsert_sales_raw(
         # You can use insert or upsert, depending on whether you want de-duplication.
         # Here we use upsert; you must set a unique constraint on the table for it to work well.
         response = (
-            supabase.schema(schema_name).table(table_name).upsert(chunk).execute()
+            supabase
+            .schema(schema_name)
+            .table(table_name)
+            .upsert(chunk, on_conflict="record_key")
+            .execute()
         )
 
         # Optionally check for errors
