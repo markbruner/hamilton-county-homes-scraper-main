@@ -66,6 +66,7 @@ _NUMERIC_RE = re.compile(r"^\d+$")
 
 @dataclass(slots=True, frozen=True)
 class AddressParts:
+    record_key: Optional[str] = None
     ParcelNumber: Optional[str] = None
     Recipient: Optional[str] = None
 
@@ -198,6 +199,7 @@ def tag_address(
     
 
     parts = AddressParts(
+        record_key = None,
         ParcelNumber=parcel_id,
         Recipient=usparsed.get("Recipient"),
         AddressNumber=usparsed.get("AddressNumber"),

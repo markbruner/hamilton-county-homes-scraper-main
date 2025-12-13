@@ -32,20 +32,14 @@ def upsert_sales_raw(
     """
     if df.empty:
         return 0
+    
+    df = df.drop_duplicates()
 
     records: List[dict] = df.to_dict(orient="records")
 
-    before = len(records)
-    deduped = {}
     for r in records:
-        deduped[r["record_key"]] = make_record_key(r)
+       r["record_key"] = make_record_key(r)
     
-    records = list(deduped.values())
-    after = len(records)
-    
-    if after < before:
-        print(f"Dropped {before-after} duplicate record_key rows before upsert.")
-
     total = 0
     for start in range(0, len(records), batch_size):
         chunk = records[start : start + batch_size]
