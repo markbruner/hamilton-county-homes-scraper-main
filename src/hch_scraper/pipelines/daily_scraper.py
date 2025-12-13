@@ -133,16 +133,12 @@ def _scrape_all_dates(
     while ranges[:]:
         for start, end in ranges[:]:
             logger.info(f"Scraping from {start} to {end}")
-            all_data, updated_ranges, driver, modified = main(
+            all_data = main(
                 robots_txt_allowed, ScrapeRequest(start, end, ranges)
             )
-            if modified:
-                ranges = updated_ranges  # main split the date range; retry
-                break
-            if not os.getenv("HCH_SCRAPER_SKIP_ENRICHER"):
-                all_data, addr_issues = _enrich_addresses(all_data)
-                    # Normalize transfer_date to ISO strings if present
 
+            all_data, addr_issues = _enrich_addresses(all_data)
+                    
             if "transfer_date" in all_data.columns:
                 all_data["transfer_date"] = (
                     pd.to_datetime(all_data["transfer_date"], errors="coerce")
@@ -277,8 +273,8 @@ def main(
         logger.info(
             f"Completed scraping for {request.start}–{request.end}: {data.shape[0]} rows."
         )
-        check.dates.pop(0)
-        return data, check.dates, driver, check.modified
+
+        return data
 
     finally:
         safe_quit(driver)
