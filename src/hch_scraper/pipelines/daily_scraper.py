@@ -225,10 +225,10 @@ def _initialize_ranges(
     ranges = []
 
     current_start = start_dt
-    while current_start <= end_dt:
+    while current_start < end_dt:
         current_end = min(current_start + step, end_dt)
         ranges.append((current_start.strftime(fmt), current_end.strftime(fmt)))
-        current_start += step
+        current_start += step + 1
 
     return ranges
 
