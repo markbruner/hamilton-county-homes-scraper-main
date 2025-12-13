@@ -5,7 +5,7 @@ from typing import List
 import pandas as pd
 from supabase import Client
 
-from hch_scraper.loaders.supabase_loader import make_record_key
+from hch_scraper.loaders.supabase_loader import make_record_key, make_row_hash
 
 def upsert_sales_raw(
     df: pd.DataFrame,
@@ -36,29 +36,21 @@ def upsert_sales_raw(
     df = df.drop_duplicates()
 
     records: List[dict] = df.to_dict(orient="records")
-    
-    records = records.drop_duplicates(ignore_index=True)
 
-    for r in records:
-       r["record_key"] = make_record_key(r)
-    
     total = 0
-    for start in range(0, len(records), batch_size):
-        chunk = records[start : start + batch_size]
+    for r in records:
+        r["record_key"] = make_record_key(r)
+        r["row_hash"] = make_row_hash(r)
+        response = supabase.rpc(
+            "upsert_sales_hamilton_one",
+            {"p": r}
+        ).execute()
 
-        response = (
-            supabase
-            .schema(schema_name)
-            .table(table_name)
-            .upsert(chunk, on_conflict="record_key")
-            .execute()
-        )
-
-        # Optionally check for errors
+         # Optionally check for errors
         if getattr(response, "error", None):
             # You can swap print for logging here
             raise RuntimeError(f"Supabase upsert error: {response.error}")
-
-        total += len(chunk)
-
+        
+        total += 1
+    
     return total
