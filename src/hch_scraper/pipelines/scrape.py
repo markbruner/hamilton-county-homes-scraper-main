@@ -251,7 +251,7 @@ def _initialize_ranges(
 ) -> List[Tuple[str, str]]:
     """
     Break the overall [start, end] span into consecutive `window_days`-long
-    intervals (inclusive) and return them as (start, end) string tuples.
+    intervals (inclusive) and return them asd (start, end) string tuples.
 
     Example
     -------

@@ -34,6 +34,10 @@ def upsert_sales_raw(
         return 0
     
     df = df.drop_duplicates()
+    df = (
+        df.drop_duplicates()
+        .loc[lambda d: d["parcel_number"].notna()]
+    )
 
     records: List[dict] = df.to_dict(orient="records")
 
