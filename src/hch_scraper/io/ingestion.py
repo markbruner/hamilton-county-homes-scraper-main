@@ -36,6 +36,8 @@ def upsert_sales_raw(
     df = df.drop_duplicates()
 
     records: List[dict] = df.to_dict(orient="records")
+    
+    records = records.drop_duplicates(ignore_index=True)
 
     for r in records:
        r["record_key"] = make_record_key(r)
