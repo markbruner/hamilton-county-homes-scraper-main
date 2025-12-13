@@ -36,15 +36,10 @@ from hch_scraper.utils.data_extraction.address_cleaners import (
     normalize_address_parts,
     tag_address,
 )
-from hch_scraper.io.supabase_client import get_supabase_client
 from hch_scraper.io.ingestion import upsert_sales_raw
 from hch_scraper.utils.data_extraction.form_helpers.selenium_utils import safe_quit
-from hch_scraper.utils.data_extraction.form_helpers.data_formatting import (
-    final_csv_conversion,
-)
-from hch_scraper.utils.data_extraction.form_helpers.datetime_utils import (
-    check_reset_needed,
-)
+from hch_scraper.utils.data_extraction.form_helpers.datetime_utils import check_reset_needed
+
 
 
 @dataclass
@@ -64,14 +59,13 @@ class Dates:
 @dataclass
 class ScraperResult:
     """
-    Represents the output from scraping a single year.
+    Represents the output from scraping a date range.
 
     Args:
         data (pd.DataFrame): Combined scraped data.
         remaining_ranges (List[Tuple[str, str]]): Remaining ranges after scraping.
         final_start (str): Final formatted start date.
         final_end (str): Final formatted end date.
-        year (int): The year the data corresponds to.
     """
 
     data: pd.DataFrame
@@ -129,7 +123,7 @@ def _ask_date(prompt: str) -> date:
 
 def run_scraper_for_dates(
     dates: Dates, robots_txt_allowed: bool
-) -> ScraperResult:
+) -> None:
     """
     Runs the scraper for a single year within the specified date range.
 
@@ -140,23 +134,16 @@ def run_scraper_for_dates(
     Returns:
         ScraperResult: Structured result containing scraped data and metadata.
     """
-    formatted_start = _format_date(Dates.start_date)
-    formatted_end = _format_date(Dates.end_date)
+    formatted_start = _format_date(dates.start_date)
+    formatted_end = _format_date(dates.end_date)
     ranges = _initialize_ranges(formatted_start, formatted_end)
 
-    data = _scrape_all_dates(ranges, robots_txt_allowed, formatted_start, formatted_end)
-
-    return ScraperResult(
-        data=data,
-        remaining_ranges=ranges,
-        final_start=formatted_start,
-        final_end=formatted_end,
-    )
+    _scrape_all_dates(ranges, robots_txt_allowed, formatted_start, formatted_end)
 
 
 def _scrape_all_dates(
     ranges: List[Tuple[str, str]], robots_txt_allowed: bool, search_start, search_end
-) -> pd.DataFrame:
+) -> None:
     """
     Loops through ranges and gathers all data into a single DataFrame.
 
@@ -167,19 +154,24 @@ def _scrape_all_dates(
     Returns:
         pd.DataFrame: Combined DataFrame of all scraped data.
     """
-    all_data_df = pd.DataFrame()
+
+    SUPABASE_URL = os.environ["SUPABASE_URL"]
+    SUPABASE_SERVICE_ROLE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+
+    supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+    
     while ranges[:]:
         for start, end in ranges[:]:
             logger.info(f"Scraping from {start} to {end}")
             all_data, updated_ranges, driver, modified = main(
                 robots_txt_allowed, ScrapeRequest(start, end, ranges)
             )
+            ranges = updated_ranges 
+            
             if modified:
-                ranges = updated_ranges  # main split the date range; retry
-                break
-            if not os.getenv("HCH_SCRAPER_SKIP_ENRICHER"):
-                all_data, addr_issues = _enrich_addresses(all_data)
-                    # Normalize transfer_date to ISO strings if present
+                 break
+
+            all_data, addr_issues = _enrich_addresses(all_data)
 
             if "transfer_date" in all_data.columns:
                 all_data["transfer_date"] = (
@@ -191,31 +183,11 @@ def _scrape_all_dates(
             # Convert everything to object and replace non-finite values with None
             all_data = all_data.astype(object)
             all_data = all_data.replace({np.nan: None, np.inf: None, -np.inf: None})
-        
-            expected_cols = [
-                "parcel_number",
-                "address",
-                "bbb",
-                "finsqft",
-                "use",
-                "year_built",
-                "transfer_date",
-                "amount",
-            ]
-            
-            data_sub = all_data[expected_cols].copy()
-            SUPABASE_URL = os.environ["SUPABASE_URL"]
-            SUPABASE_SERVICE_ROLE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
-            print("Using Supabase key starting with:", SUPABASE_SERVICE_ROLE_KEY[:8])
 
-            supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-            upsert_sales_raw(df=data_sub,
+            upsert_sales_raw(df=all_data,
                              supabase=supabase,
                              schema_name="public",
                              table_name="sales_hamilton")
-                
-            final_csv_conversion(all_data, search_start, search_end)
-    return all_data_df
 
 
 def _enrich_addresses(df: pd.DataFrame) -> pd.DataFrame:
