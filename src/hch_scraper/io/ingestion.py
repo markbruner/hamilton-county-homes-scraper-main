@@ -33,7 +33,6 @@ def upsert_sales_raw(
     if df.empty:
         return 0
     
-    df = df.drop_duplicates()
     df = (
         df.drop_duplicates()
         .loc[lambda d: d["parcel_number"].notna()]
