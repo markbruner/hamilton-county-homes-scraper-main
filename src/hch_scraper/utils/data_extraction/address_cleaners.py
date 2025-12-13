@@ -102,6 +102,12 @@ class AddressParts:
     StateName: Optional[str] = None
     AddressType: Optional[str] = None
     address_range_type: Optional[str] = None
+    row_hash: Optional[str] = None
+    first_seen_at: Optional[str] = None,
+    last_seen_at: Optional[str] = None,
+    updated_at: Optional[str] = None,
+    update_type: Optional[str] = None,
+    changed_fields: Optional[str] = None,
 
 
 EMPTY_PARSE = AddressParts()  # optional convenience
@@ -231,6 +237,12 @@ def tag_address(
         StateName=usparsed.get("StateName"),
         AddressType=usparsed.get("AddressType"),
         address_range_type = address_rng_type,
+        row_hash = None,
+        first_seen_at = None,
+        last_seen_at = None,
+        updated_at = None,
+        update_type = None,
+        changed_fields = None,
 
     )
 
