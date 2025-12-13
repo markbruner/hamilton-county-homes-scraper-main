@@ -33,7 +33,11 @@ def upsert_sales_raw(
     if df.empty:
         return 0
     
-    df = df.drop_duplicates()
+    df = (
+        df.drop_duplicates()
+        .loc[lambda d: d["parcel_number"].notna()]
+    )
+    df.columns = df.columns.str.lower()
 
     records: List[dict] = df.to_dict(orient="records")
 
@@ -41,6 +45,7 @@ def upsert_sales_raw(
     for r in records:
         r["record_key"] = make_record_key(r)
         r["row_hash"] = make_row_hash(r)
+
         response = supabase.rpc(
             "upsert_sales_hamilton_one",
             {"p": r}
