@@ -166,7 +166,17 @@ def _detect_address_range(addr: str):
 
     elif diff > 200:
         return None, None, addr, "unknown"
-    
+
+def fix_alpha_address_number(parsed):
+    if "AddressNumber" in parsed:
+        if not re.search(r"\d", parsed["AddressNumber"]):
+            # Move it into StreetName
+            parsed["StreetName"] = (
+                parsed.get("StreetName", "") + " " + parsed["AddressNumber"]
+            ).strip()
+            del parsed["AddressNumber"]
+    return parsed
+
 def tag_address(
     row: pd.Series,
     addr_col: str,
@@ -203,7 +213,8 @@ def tag_address(
     if (high_num is not None) and (int(high_num) - int(low_num) < 0):
         high_num = None
     
-
+    usparsed = fix_alpha_address_number(usparsed)
+    
     parts = AddressParts(
         record_key = None,
         ParcelNumber=parcel_id,
