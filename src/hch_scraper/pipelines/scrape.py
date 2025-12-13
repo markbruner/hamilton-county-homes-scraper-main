@@ -140,8 +140,8 @@ def run_scraper_for_dates(
     Returns:
         ScraperResult: Structured result containing scraped data and metadata.
     """
-    formatted_start = _format_date(Dates.start_date)
-    formatted_end = _format_date(Dates.end_date)
+    formatted_start = _format_date(dates.start_date)
+    formatted_end = _format_date(dates.end_date)
     ranges = _initialize_ranges(formatted_start, formatted_end)
 
     data = _scrape_all_dates(ranges, robots_txt_allowed, formatted_start, formatted_end)
