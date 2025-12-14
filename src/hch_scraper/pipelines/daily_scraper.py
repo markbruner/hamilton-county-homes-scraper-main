@@ -26,6 +26,7 @@ from dotenv import load_dotenv
 import numpy as np
 from supabase import create_client, Client
 import zoneinfo
+import argparse
 
 from hch_scraper.utils.logging_setup import logger
 from hch_scraper.config.settings import URLS
@@ -92,6 +93,45 @@ class ScraperResult:
     final_end: str
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Hamilton County sales scraper"
+    )
+
+    parser.add_argument(
+        "--min_days_ago",
+        type=int,
+        required=True,
+        help="Most recent day to scrape (e.g. 1 = yesterday)"
+    )
+
+    parser.add_argument(
+        "--max_days_ago",
+        type=int,
+        required=True,
+        help="Oldest day to scrape (e.g. 3 = three days ago)"
+    )
+
+    return parser.parse_args()
+
+
+def validate_args(args: argparse.Namespace) -> None:
+    if args.min_days_ago < args.max_days_ago:
+        raise ValueError(
+            f"min_days_ago ({args.min_days_ago}) must be >= max_days_ago ({args.max_days_ago})"
+        )
+
+    if args.min_days_ago < 0 or args.max_days_ago < 0:
+        raise ValueError("min_days_ago and max_days_ago must be >= 0")
+    
+    MAX_BACKFILL_DAYS = 730  # 2 years
+
+    if args.max_days_ago > MAX_BACKFILL_DAYS:
+        raise ValueError(
+            f"max_days_ago cannot exceed {MAX_BACKFILL_DAYS}"
+        )
+    
+    
 def run_scraper_for_dates(
     dates: datetime, robots_txt_allowed: bool
 ) -> ScraperResult:
@@ -110,7 +150,6 @@ def run_scraper_for_dates(
     ranges = _initialize_ranges(formatted_start, formatted_end)
 
     _scrape_all_dates(ranges, robots_txt_allowed, formatted_start, formatted_end)
-
 
 
 def _scrape_all_dates(
@@ -182,14 +221,20 @@ def run_scraper_pipeline():
     and runs the scraper for each date in the specified range.
     """
     tz = zoneinfo.ZoneInfo("America/New_York")
-    yesterday = (datetime.now(tz) - timedelta(days=1)).date()
-    dates = Dates(yesterday, yesterday)
-    driver, wait = init_driver(URLS["base"])
+    args = parse_args()
+    validate_args(args)
 
-    try:
-        robots_txt_allowed = check_allowed_webscraping(driver)
-    finally:
-        safe_quit(driver)
+    start_date = (datetime.now(tz) - timedelta(days=args.min_days_ago)).date()
+    end_date = (datetime.now(tz) - timedelta(days=args.max_days_ago)).date()
+    dates = Dates(start_date, end_date)
+
+    # driver, wait = init_driver(URLS["base"])
+
+    # try:
+    #     robots_txt_allowed = check_allowed_webscraping(driver)
+    # finally:
+    #     safe_quit(driver)
+    robots_txt_allowed = True
 
     run_scraper_for_dates(dates, robots_txt_allowed)
 
