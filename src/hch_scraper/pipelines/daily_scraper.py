@@ -59,6 +59,7 @@ class Dates:
     start_date: date
     end_date: date
 
+
 @dataclass
 class ScrapeRequest:
     """
@@ -73,6 +74,7 @@ class ScrapeRequest:
     start: str
     end: str
     ranges: List[Tuple[str, str]]
+
 
 @dataclass
 class ScraperResult:
@@ -94,22 +96,20 @@ class ScraperResult:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Hamilton County sales scraper"
-    )
+    parser = argparse.ArgumentParser(description="Hamilton County sales scraper")
 
     parser.add_argument(
         "--min_days_ago",
         type=int,
         required=True,
-        help="Most recent day to scrape (e.g. 1 = yesterday)"
+        help="Most recent day to scrape (e.g. 1 = yesterday)",
     )
 
     parser.add_argument(
         "--max_days_ago",
         type=int,
         required=True,
-        help="Oldest day to scrape (e.g. 3 = three days ago)"
+        help="Oldest day to scrape (e.g. 3 = three days ago)",
     )
 
     return parser.parse_args()
@@ -123,18 +123,14 @@ def validate_args(args: argparse.Namespace) -> None:
 
     if args.min_days_ago < 0 or args.max_days_ago < 0:
         raise ValueError("min_days_ago and max_days_ago must be >= 0")
-    
+
     MAX_BACKFILL_DAYS = 730  # 2 years
 
     if args.max_days_ago > MAX_BACKFILL_DAYS:
-        raise ValueError(
-            f"max_days_ago cannot exceed {MAX_BACKFILL_DAYS}"
-        )
-    
-    
-def run_scraper_for_dates(
-    dates: datetime, robots_txt_allowed: bool
-) -> ScraperResult:
+        raise ValueError(f"max_days_ago cannot exceed {MAX_BACKFILL_DAYS}")
+
+
+def run_scraper_for_dates(dates: datetime, robots_txt_allowed: bool) -> ScraperResult:
     """
     Runs the scraper for a single year within the specified date range.
 
@@ -172,29 +168,26 @@ def _scrape_all_dates(
     while ranges[:]:
         for start, end in ranges[:]:
             logger.info(f"Scraping from {start} to {end}")
-            all_data = main(
-                robots_txt_allowed, ScrapeRequest(start, end, ranges)
-            )
+            all_data = main(robots_txt_allowed, ScrapeRequest(start, end, ranges))
 
             all_data, addr_issues = _enrich_addresses(all_data)
-                    
+
             if "transfer_date" in all_data.columns:
-                all_data["transfer_date"] = (
-                    pd.to_datetime(all_data["transfer_date"], errors="coerce")
-                    .dt.date
-                    .astype("string")
-                )
+                all_data["transfer_date"] = pd.to_datetime(
+                    all_data["transfer_date"], errors="coerce"
+                ).dt.date.astype("string")
 
             # Convert everything to object and replace non-finite values with None
             all_data = all_data.astype(object)
             all_data = all_data.replace({np.nan: None, np.inf: None, -np.inf: None})
             all_data.columns = all_data.columns.str.lower()
-            all_data.columns = all_data.columns.str.replace(" ","_")
-            upsert_sales_raw(df=all_data,
-                             supabase=supabase,
-                             schema_name="public",
-                             table_name="sales_hamilton")
-    
+            all_data.columns = all_data.columns.str.replace(" ", "_")
+            upsert_sales_raw(
+                df=all_data,
+                supabase=supabase,
+                schema_name="public",
+                table_name="sales_hamilton",
+            )
 
 
 def _enrich_addresses(df: pd.DataFrame) -> pd.DataFrame:
@@ -313,7 +306,6 @@ def main(
             return pd.DataFrame(), check.dates, driver, check.modified
 
         data = get_csv_data(wait)
-
 
         logger.info(
             f"Completed scraping for {request.start}–{request.end}: {data.shape[0]} rows."

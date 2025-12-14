@@ -1,5 +1,6 @@
 from hashlib import sha256
 
+
 def _get(row: dict, *keys: str) -> str:
     """Return the first present non-null value among keys as a stripped string."""
     for k in keys:
@@ -8,6 +9,7 @@ def _get(row: dict, *keys: str) -> str:
             return str(v).strip()
     return ""
 
+
 def make_record_key(row: dict) -> str:
     # Adjust these keys to match your DF columns
     parcel = _get(row, "parcel_number")
@@ -15,6 +17,7 @@ def make_record_key(row: dict) -> str:
 
     parts = [parcel, transfer_date]
     return sha256("|".join(parts).encode("utf-8")).hexdigest()
+
 
 def make_row_hash(row: dict) -> str:
     parts = [
@@ -44,7 +47,7 @@ def make_row_hash(row: dict) -> str:
         _get(row, "landmarkname"),
         _get(row, "uspsboxgroupid"),
         _get(row, "uspsboxgrouptype"),
-        _get(row, "uspsuspsboxid"),        
+        _get(row, "uspsuspsboxid"),
         _get(row, "uspsboxtype"),
         _get(row, "buildingname"),
         _get(row, "occupancytype"),
@@ -54,5 +57,5 @@ def make_row_hash(row: dict) -> str:
         _get(row, "placename"),
         _get(row, "statename"),
         _get(row, "addresstype"),
-        ]
+    ]
     return sha256("|".join(parts).encode("utf-8")).hexdigest()
