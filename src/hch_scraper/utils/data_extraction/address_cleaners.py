@@ -103,11 +103,11 @@ class AddressParts:
     AddressType: Optional[str] = None
     address_range_type: Optional[str] = None
     row_hash: Optional[str] = None
-    first_seen_at: Optional[str] = None,
-    last_seen_at: Optional[str] = None,
-    updated_at: Optional[str] = None,
-    update_type: Optional[str] = None,
-    changed_fields: Optional[str] = None,
+    first_seen_at: Optional[str] = (None,)
+    last_seen_at: Optional[str] = (None,)
+    updated_at: Optional[str] = (None,)
+    update_type: Optional[str] = (None,)
+    changed_fields: Optional[str] = (None,)
 
 
 EMPTY_PARSE = AddressParts()  # optional convenience
@@ -159,13 +159,14 @@ def _detect_address_range(addr: str):
     if diff <= 200:
         addr_for_tagging = f"{low} {rest}"
         return low, high, addr_for_tagging, "range"
-    
+
     if diff > 200 and high_i <= 6000:  # heuristic: reasonable unit size
         addr_for_tagging = f"{low} {rest} UNIT {high}"
         return low, None, addr_for_tagging, "unit"
 
     elif diff > 200:
         return None, None, addr, "unknown"
+
 
 def fix_alpha_address_number(parsed):
     if "AddressNumber" in parsed:
@@ -176,6 +177,7 @@ def fix_alpha_address_number(parsed):
             ).strip()
             del parsed["AddressNumber"]
     return parsed
+
 
 def tag_address(
     row: pd.Series,
@@ -199,7 +201,9 @@ def tag_address(
     parcel_id = row[parcel_col]
 
     # Detect space-separated number ranges like "1308 1310 WILLIAM H TAFT RD"
-    low_num, high_num, addr_for_tagging, address_rng_type = _detect_address_range(addr_clean)
+    low_num, high_num, addr_for_tagging, address_rng_type = _detect_address_range(
+        addr_clean
+    )
 
     try:
         usparsed, _ = usaddress.tag(addr_for_tagging)
@@ -212,11 +216,11 @@ def tag_address(
 
     if (high_num is not None) and (int(high_num) - int(low_num) < 0):
         high_num = None
-    
+
     usparsed = fix_alpha_address_number(usparsed)
-    
+
     parts = AddressParts(
-        record_key = None,
+        record_key=None,
         ParcelNumber=parcel_id,
         Recipient=usparsed.get("Recipient"),
         AddressNumber=usparsed.get("AddressNumber"),
@@ -247,14 +251,13 @@ def tag_address(
         PlaceName=usparsed.get("PlaceName"),
         StateName=usparsed.get("StateName"),
         AddressType=usparsed.get("AddressType"),
-        address_range_type = address_rng_type,
-        row_hash = None,
-        first_seen_at = None,
-        last_seen_at = None,
-        updated_at = None,
-        update_type = None,
-        changed_fields = None,
-
+        address_range_type=address_rng_type,
+        row_hash=None,
+        first_seen_at=None,
+        last_seen_at=None,
+        updated_at=None,
+        update_type=None,
+        changed_fields=None,
     )
 
     return parts, issues

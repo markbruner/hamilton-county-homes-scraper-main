@@ -38,8 +38,9 @@ from hch_scraper.utils.data_extraction.address_cleaners import (
 )
 from hch_scraper.io.ingestion import upsert_sales_raw
 from hch_scraper.utils.data_extraction.form_helpers.selenium_utils import safe_quit
-from hch_scraper.utils.data_extraction.form_helpers.datetime_utils import check_reset_needed
-
+from hch_scraper.utils.data_extraction.form_helpers.datetime_utils import (
+    check_reset_needed,
+)
 
 
 @dataclass
@@ -121,9 +122,7 @@ def _ask_date(prompt: str) -> date:
             print("↳ Invalid date format. Please use MM/DD/YYYY.")
 
 
-def run_scraper_for_dates(
-    dates: Dates, robots_txt_allowed: bool
-) -> None:
+def run_scraper_for_dates(dates: Dates, robots_txt_allowed: bool) -> None:
     """
     Runs the scraper for a single year within the specified date range.
 
@@ -159,35 +158,35 @@ def _scrape_all_dates(
     SUPABASE_SERVICE_ROLE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
 
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-    
+
     while ranges[:]:
         for start, end in ranges[:]:
             logger.info(f"Scraping from {start} to {end}")
             all_data, updated_ranges, driver, modified = main(
                 robots_txt_allowed, ScrapeRequest(start, end, ranges)
             )
-            ranges = updated_ranges 
-            
+            ranges = updated_ranges
+
             if modified:
-                 break
+                break
 
             all_data, addr_issues = _enrich_addresses(all_data)
 
             if "transfer_date" in all_data.columns:
-                all_data["transfer_date"] = (
-                    pd.to_datetime(all_data["transfer_date"], errors="coerce")
-                    .dt.date
-                    .astype("string")
-                )
+                all_data["transfer_date"] = pd.to_datetime(
+                    all_data["transfer_date"], errors="coerce"
+                ).dt.date.astype("string")
 
             # Convert everything to object and replace non-finite values with None
             all_data = all_data.astype(object)
             all_data = all_data.replace({np.nan: None, np.inf: None, -np.inf: None})
 
-            upsert_sales_raw(df=all_data,
-                             supabase=supabase,
-                             schema_name="public",
-                             table_name="sales_hamilton")
+            upsert_sales_raw(
+                df=all_data,
+                supabase=supabase,
+                schema_name="public",
+                table_name="sales_hamilton",
+            )
 
 
 def _enrich_addresses(df: pd.DataFrame) -> pd.DataFrame:
@@ -311,7 +310,6 @@ def main(
             return pd.DataFrame(), check.dates, driver, check.modified
 
         data = get_csv_data(wait)
-
 
         logger.info(
             f"Completed scraping for {request.start}–{request.end}: {data.shape[0]} rows."

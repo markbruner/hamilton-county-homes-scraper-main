@@ -7,6 +7,7 @@ from supabase import Client
 
 from hch_scraper.loaders.supabase_loader import make_record_key, make_row_hash
 
+
 def upsert_sales_raw(
     df: pd.DataFrame,
     *,
@@ -32,11 +33,8 @@ def upsert_sales_raw(
     """
     if df.empty:
         return 0
-    
-    df = (
-        df.drop_duplicates()
-        .loc[lambda d: d["parcel_number"].notna()]
-    )
+
+    df = df.drop_duplicates().loc[lambda d: d["parcel_number"].notna()]
     df.columns = df.columns.str.lower()
 
     records: List[dict] = df.to_dict(orient="records")
@@ -45,16 +43,13 @@ def upsert_sales_raw(
     for r in records:
         r["record_key"] = make_record_key(r)
         r["row_hash"] = make_row_hash(r)
-        response = supabase.rpc(
-            "upsert_sales_hamilton_one",
-            {"p": r}
-        ).execute()
+        response = supabase.rpc("upsert_sales_hamilton_one", {"p": r}).execute()
 
-         # Optionally check for errors
+        # Optionally check for errors
         if getattr(response, "error", None):
             # You can swap print for logging here
             raise RuntimeError(f"Supabase upsert error: {response.error}")
-        
+
         total += 1
-    
+
     return total
