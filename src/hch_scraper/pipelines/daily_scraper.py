@@ -310,7 +310,8 @@ def main(
         logger.info(
             f"Completed scraping for {request.start}–{request.end}: {data.shape[0]} rows."
         )
-
+        check.dates.pop(0)
+        
         return data
 
     finally:
