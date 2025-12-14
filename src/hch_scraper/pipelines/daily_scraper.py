@@ -116,9 +116,9 @@ def parse_args() -> argparse.Namespace:
 
 
 def validate_args(args: argparse.Namespace) -> None:
-    if args.min_days_ago < args.max_days_ago:
+    if args.min_days_ago >= args.max_days_ago:
         raise ValueError(
-            f"min_days_ago ({args.min_days_ago}) must be >= max_days_ago ({args.max_days_ago})"
+            f"min_days_ago ({args.min_days_ago}) must be < max_days_ago ({args.max_days_ago})"
         )
 
     if args.min_days_ago < 0 or args.max_days_ago < 0:
