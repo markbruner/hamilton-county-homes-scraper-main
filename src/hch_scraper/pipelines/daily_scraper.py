@@ -220,7 +220,7 @@ def run_scraper_pipeline():
     start_date = (datetime.now(tz) - timedelta(days=args.min_days_ago)).date()
     end_date = (datetime.now(tz) - timedelta(days=args.max_days_ago)).date()
     dates = Dates(start_date, end_date)
-    logger.info(f"the date range is for start is {start_date} and end is {end_date})
+    logger.info(f"the date range is for start is {start_date} and end is {end_date}")
     # driver, wait = init_driver(URLS["base"])
 
     # try:
