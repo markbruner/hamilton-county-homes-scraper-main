@@ -111,12 +111,29 @@ class AddressParts:
 
 
 EMPTY_PARSE = AddressParts()  # optional convenience
+CONDO_USES = {550, 552, 554, 558, 555}
+APT_USES   = {401, 402, 403, 404, 431}
+MF_USES    = {520, 530}
+
+USE_TO_HOUSING = {
+    **{u: "condo" for u in CONDO_USES},
+    **{u: "apt"   for u in APT_USES},
+    **{u: "unit"  for u in MF_USES},
+}
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Pre-clean + tagging
 # ─────────────────────────────────────────────────────────────────────────────
 
-
+def _safe_int(x) -> Optional[int]:
+    try:
+        if x is None:
+            return None
+        # handles numpy ints, "550", "550.0", etc.
+        return int(float(x))
+    except (TypeError, ValueError):
+        return None
+    
 def _preclean(addr: str) -> str:
     """
     Light, non-destructive cleanup before usaddress:
@@ -135,7 +152,7 @@ def _preclean(addr: str) -> str:
     return s
 
 
-def _detect_address_range(addr: str):
+def _detect_address_range(addr: str, housing_type: str):
     """
     Detects a leading numeric range like '1308 1310 WILLIAM H TAFT RD'.
 
@@ -154,13 +171,21 @@ def _detect_address_range(addr: str):
 
     low_i, high_i = int(low), int(high)
 
+    if housing_type in ('unit','condo'):
+        addr_for_tagging = f"{low} {rest} UNIT {high}"
+        return low, None, addr_for_tagging, "unit"
+
+    if housing_type == 'apt':
+        addr_for_tagging = f"{low} {rest} APT {high}"
+        return low, None, addr_for_tagging, "apt"
+    
     diff = high_i - low_i
     # Case 2: plausible address range
-    if diff <= 0 & diff <= 200:
+    if 1 <= diff <= 200:
         addr_for_tagging = f"{low} {rest}"
         return low, high, addr_for_tagging, "range"
     
-    if diff < 0:
+    if diff <= 0:
         addr_for_tagging = f"{low} {rest} UNIT {high}"
         return low, None, addr_for_tagging, "unit"
     
@@ -168,8 +193,7 @@ def _detect_address_range(addr: str):
         addr_for_tagging = f"{low} {rest} UNIT {high}"
         return low, None, addr_for_tagging, "unit"
 
-    elif diff > 200:
-        return None, None, addr, "unknown"
+    return None, None, addr, "unknown"
 
 
 def fix_alpha_address_number(parsed):
@@ -204,9 +228,12 @@ def tag_address(
     addr_clean = _preclean(addr_raw)
     parcel_id = row[parcel_col]
 
+    use_code = _safe_int(row.get("use"))
+    housing_type = USE_TO_HOUSING.get(use_code)  # "condo" | "apt" | "unit" | None
+
     # Detect space-separated number ranges like "1308 1310 WILLIAM H TAFT RD"
     low_num, high_num, addr_for_tagging, address_rng_type = _detect_address_range(
-        addr_clean
+        addr_clean, housing_type
     )
 
     try:
