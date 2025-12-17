@@ -154,9 +154,9 @@ def _detect_address_range(addr: str):
 
     low_i, high_i = int(low), int(high)
 
-    diff = abs(high_i - low_i)
+    diff = high_i - low_i
     # Case 2: plausible address range
-    if diff <= 200:
+    if diff <= 0 & diff <= 200:
         addr_for_tagging = f"{low} {rest}"
         return low, high, addr_for_tagging, "range"
 
