@@ -159,7 +159,11 @@ def _detect_address_range(addr: str):
     if diff <= 0 & diff <= 200:
         addr_for_tagging = f"{low} {rest}"
         return low, high, addr_for_tagging, "range"
-
+    
+    if diff < 0:
+        addr_for_tagging = f"{low} {rest} UNIT {high}"
+        return low, None, addr_for_tagging, "unit"
+    
     if diff > 200 and high_i <= 6000:  # heuristic: reasonable unit size
         addr_for_tagging = f"{low} {rest} UNIT {high}"
         return low, None, addr_for_tagging, "unit"
