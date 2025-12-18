@@ -233,7 +233,7 @@ def tag_address(
     use_code = _safe_int(row.get("use"))
     housing_type = USE_TO_HOUSING.get(use_code)  # "condo" | "apt" | "unit" | None
     
-    addr_clean = _move_leading_unit_token(addr_clean, housing_type)
+    addr_clean = _move_leading_unit_token(addr_clean)
 
     # Detect space-separated number ranges like "1308 1310 WILLIAM H TAFT RD"
     low_num, high_num, addr_for_tagging, address_rng_type = _detect_address_range(
