@@ -234,11 +234,14 @@ def tag_address(
     housing_type = USE_TO_HOUSING.get(use_code)  # "condo" | "apt" | "unit" | None
     
     addr_clean = _move_leading_unit_token(addr_clean)
-
+    logger.info("DEBUG use=%r use_code=%r housing_type=%r addr_clean=%r",
+                row.get("use"), use_code, housing_type, addr_clean)
     # Detect space-separated number ranges like "1308 1310 WILLIAM H TAFT RD"
     low_num, high_num, addr_for_tagging, address_rng_type = _detect_address_range(
         addr_clean, housing_type
     )
+    logger.info("DEBUG addr_for_tagging=%r low=%r high=%r rng_type=%r",
+            addr_for_tagging, low_num, high_num, address_rng_type)
 
     try:
         usparsed, _ = usaddress.tag(addr_for_tagging)
