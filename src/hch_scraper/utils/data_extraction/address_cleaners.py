@@ -16,20 +16,6 @@ from hch_scraper.config.mappings.secondary_units import secondary_unit_normaliza
 
 logger = logging.getLogger(__name__)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Pre-compiled regexes
-# ─────────────────────────────────────────────────────────────────────────────
-
-HYPHEN_RE = re.compile(r"\b(\d+)\s*-\s*(\d+)\b")
-FRACTION_RE = re.compile(r"\b(\d+)\s+(\d+)/(\d+)\b")
-ORDINAL_RE = re.compile(r"\b\d+(?:st|nd|rd|th)\b", re.IGNORECASE)
-
-EXTRA_INFO_RE = re.compile(
-    r"\s*\([A-Za-z]+\)\s*",
-    re.IGNORECASE | re.VERBOSE,
-)
-
-_NUMERIC_RE = re.compile(r"^\d+$")
 
 """
 Address Parsing and Enrichment Utility
@@ -51,13 +37,24 @@ HYPHEN_RE = re.compile(r"\b(\d+)\s*-\s*(\d+)\b")
 FRACTION_RE = re.compile(r"\b(\d+)\s+(\d+)/(\d+)\b")
 ORDINAL_RE = re.compile(r"\b\d+(?:st|nd|rd|th)\b", re.IGNORECASE)
 RANGE_PREFIX_RE = re.compile(r"^\s*(\d+)\s+(\d+)\s+(.*)$")
+UNIT_TOKEN_RE = re.compile(r"^\d+[A-Z]$|^\d+[A-Z]{1,2}$|^[A-Z]{1,2}\d+$", re.I)
 
 EXTRA_INFO_RE = re.compile(
     r"\s*\([A-Za-z]+\)\s*",
     re.IGNORECASE | re.VERBOSE,
 )
 
-_NUMERIC_RE = re.compile(r"^\d+$")
+NUMERIC_RE = re.compile(r"^\d+$")
+
+CONDO_USES = {550, 552, 554, 558, 555}
+APT_USES   = {401, 402, 403, 404, 431}
+MF_USES    = {520, 530}
+
+USE_TO_HOUSING = {
+    **{u: "condo" for u in CONDO_USES},
+    **{u: "apt"   for u in APT_USES},
+    **{u: "unit"  for u in MF_USES},
+}
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Dataclass for parsed addresses
@@ -110,16 +107,6 @@ class AddressParts:
     changed_fields: Optional[str] = (None,)
 
 
-EMPTY_PARSE = AddressParts()  # optional convenience
-CONDO_USES = {550, 552, 554, 558, 555}
-APT_USES   = {401, 402, 403, 404, 431}
-MF_USES    = {520, 530}
-
-USE_TO_HOUSING = {
-    **{u: "condo" for u in CONDO_USES},
-    **{u: "apt"   for u in APT_USES},
-    **{u: "unit"  for u in MF_USES},
-}
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Pre-clean + tagging
@@ -151,6 +138,21 @@ def _preclean(addr: str) -> str:
     s = FRACTION_RE.sub(_collapse_fraction, s)
     return s
 
+def _move_leading_unit_token(addr: str) -> str:
+    parts = addr.split()
+    if len(parts) < 4:
+        return addr
+
+    house, maybe_unit = parts[0], parts[1]
+    if not house.isdigit():
+        return addr
+
+    if not UNIT_TOKEN_RE.match(maybe_unit):
+        return addr
+
+    # rewrite: "5757 1D CHEVIOT RD" -> "5757 CHEVIOT RD UNIT 1D"
+    rest = " ".join(parts[2:])
+    return f"{house} {rest} UNIT {maybe_unit}"
 
 def _detect_address_range(addr: str, housing_type: str):
     """
@@ -230,6 +232,8 @@ def tag_address(
 
     use_code = _safe_int(row.get("use"))
     housing_type = USE_TO_HOUSING.get(use_code)  # "condo" | "apt" | "unit" | None
+    
+    addr_clean = _move_leading_unit_token(addr_clean, housing_type)
 
     # Detect space-separated number ranges like "1308 1310 WILLIAM H TAFT RD"
     low_num, high_num, addr_for_tagging, address_rng_type = _detect_address_range(
@@ -375,7 +379,7 @@ def _coerce_address_number(value: Optional[str]) -> Optional[str]:
     if value is not None and HYPHEN_RE.match(value):
         value = HYPHEN_RE.sub(lambda m: m.group(1), value)
 
-    if not value or _NUMERIC_RE.match(value):
+    if not value or NUMERIC_RE.match(value):
         return value  # already OK or empty
 
     try:
