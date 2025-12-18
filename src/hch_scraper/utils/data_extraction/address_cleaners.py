@@ -38,13 +38,12 @@ FRACTION_RE = re.compile(r"\b(\d+)\s+(\d+)/(\d+)\b")
 ORDINAL_RE = re.compile(r"\b\d+(?:st|nd|rd|th)\b", re.IGNORECASE)
 RANGE_PREFIX_RE = re.compile(r"^\s*(\d+)\s+(\d+)\s+(.*)$")
 UNIT_TOKEN_RE = re.compile(r"^\d+[A-Z]$|^\d+[A-Z]{1,2}$|^[A-Z]{1,2}\d+$", re.I)
-
-EXTRA_INFO_RE = re.compile(
-    r"\s*\([A-Za-z]+\)\s*",
-    re.IGNORECASE | re.VERBOSE,
-)
-
+EXTRA_INFO_RE = re.compile(r"\s*\([A-Za-z]+\)\s*",re.IGNORECASE | re.VERBOSE,)
 NUMERIC_RE = re.compile(r"^\d+$")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Property Use Type Dictionaries
+# ─────────────────────────────────────────────────────────────────────────────
 
 CONDO_USES = {550, 552, 554, 558, 555}
 APT_USES   = {401, 402, 403, 404, 431}

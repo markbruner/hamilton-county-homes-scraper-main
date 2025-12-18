@@ -92,6 +92,7 @@ street_type_map: dict[str, str] = {
     "CLFS": "CLIFFS",
     "CLIFFS": "CLIFFS",
     "CLB": "CLUB",
+    "CLOSE": "CL",
     "CLUB": "CLUB",
     "CMN": "COMMON",
     "COMMON": "COMMON",
