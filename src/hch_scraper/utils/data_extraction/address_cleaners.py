@@ -55,6 +55,8 @@ USE_TO_HOUSING = {
     **{u: "unit"  for u in MF_USES},
 }
 
+ROOM_FIELDS = ("total_rooms", "bedrooms", "baths", "half_baths")
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Dataclass for parsed addresses
 # ─────────────────────────────────────────────────────────────────────────────
@@ -104,6 +106,13 @@ class AddressParts:
     updated_at: Optional[str] = (None,)
     update_type: Optional[str] = (None,)
     changed_fields: Optional[str] = (None,)
+    parcelid_join: Optional[str] = None,
+    amount_num: Optional[float] = None,
+    total_rooms: Optional[int] = None,
+    bedrooms: Optional[int] = None,
+    full_baths: Optional[int] = None,
+    half_baths: Optional[int] = None,
+    geom: Optional[str] = None,
 
 
 
@@ -207,6 +216,14 @@ def fix_alpha_address_number(parsed):
             del parsed["AddressNumber"]
     return parsed
 
+def parse_bbb(bbb: str | None) -> dict[str, int | None]:
+    parts = (bbb or "").split("-")
+    parts += [None] * (len(ROOM_FIELDS) - len(parts))
+
+    return {
+        field: _safe_int(parts[i])
+        for i, field in enumerate(ROOM_FIELDS)
+    }
 
 def tag_address(
     row: pd.Series,
@@ -231,7 +248,12 @@ def tag_address(
 
     use_code = _safe_int(row.get("use"))
     housing_type = USE_TO_HOUSING.get(use_code)  # "condo" | "apt" | "unit" | None
-    
+    parcelid = row.get("parcel_number")
+    digits= parcelid.replace("-","")
+    parcelid_join = f"0{digits[:11]}"
+
+    bbb_dict = parse_bbb(row.get("bbb"))
+
     addr_clean = _move_leading_unit_token(addr_clean)
 
     # Detect space-separated number ranges like "1308 1310 WILLIAM H TAFT RD"
@@ -292,6 +314,13 @@ def tag_address(
         updated_at=None,
         update_type=None,
         changed_fields=None,
+        parcelid_join=parcelid_join,
+        amount_num=None,
+        total_rooms=bbb_dict.get("total_rooms"),
+        bedrooms=bbb_dict.get("bedrooms"),
+        full_baths=bbb_dict.get("full_baths"),
+        half_baths=bbb_dict.get("half_baths"),
+        geom=None,
     )
 
     return parts, issues
