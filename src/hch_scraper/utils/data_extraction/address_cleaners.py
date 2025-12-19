@@ -55,8 +55,6 @@ USE_TO_HOUSING = {
     **{u: "unit"  for u in MF_USES},
 }
 
-ROOM_FIELDS = ("total_rooms", "bedrooms", "baths", "half_baths")
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Dataclass for parsed addresses
 # ─────────────────────────────────────────────────────────────────────────────
@@ -216,13 +214,19 @@ def fix_alpha_address_number(parsed):
             del parsed["AddressNumber"]
     return parsed
 
-def parse_bbb(bbb: str | None) -> dict[str, int | None]:
-    parts = (bbb or "").split("-")
-    parts += [None] * (len(ROOM_FIELDS) - len(parts))
+def parse_bbb(bbb) -> dict[str, int | None]:
+    if pd.isna(bbb):
+        parts = []
+    else:
+        parts = str(bbb).split("-")
+
+    parts += [None] * 4
 
     return {
-        field: _safe_int(parts[i])
-        for i, field in enumerate(ROOM_FIELDS)
+        "total_rooms": _safe_int(parts[0]),
+        "bedrooms": _safe_int(parts[1]),
+        "baths": _safe_int(parts[2]),
+        "half_baths": _safe_int(parts[3]),
     }
 
 def tag_address(
