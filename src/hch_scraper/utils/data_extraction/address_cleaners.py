@@ -33,7 +33,7 @@ Key Features:
 # Pre-compiled regexes
 # ─────────────────────────────────────────────────────────────────────────────
 
-HYPHEN_RE = re.compile(r"\b(\d+)\s*-\s*(\d+)\b")
+HYPHEN_RE = re.compile(r"\b(\d+)\s*-\s*(\d+)+\s(.*)$\b")
 FRACTION_RE = re.compile(r"\b(\d+)\s+(\d+)/(\d+)\b")
 ORDINAL_RE = re.compile(r"\b\d+(?:st|nd|rd|th)\b", re.IGNORECASE)
 RANGE_PREFIX_RE = re.compile(r"^\s*(\d+)\s+(\d+)\s+(.*)$")
@@ -172,9 +172,10 @@ def _detect_address_range(addr: str, housing_type: str):
     """
     m = RANGE_PREFIX_RE.match(addr)
     if not m:
-        print(m)
-        return None, None, addr, None
-
+        m = HYPHEN_RE.match(addr)
+        if not m:
+            return None, None, addr, None
+    
     low, high, rest = m.groups()
 
     low_i, high_i = int(low), int(high)
@@ -252,8 +253,8 @@ def tag_address(
 
     use_code = _safe_int(row.get("use"))
     housing_type = USE_TO_HOUSING.get(use_code)  # "condo" | "apt" | "unit" | None
-    parcelid = row.get("parcel_number")
-    digits= parcelid.replace("-","")
+
+    digits= parcel_id.replace("-","")
     parcelid_join = f"0{digits[:11]}"
 
     bbb_dict = parse_bbb(row.get("bbb"))
@@ -326,7 +327,7 @@ def tag_address(
         half_baths=bbb_dict.get("half_baths"),
         geom=None,
     )
-
+    
     return parts, issues
 
 

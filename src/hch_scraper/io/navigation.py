@@ -21,12 +21,6 @@ from hch_scraper.utils.data_extraction.form_helpers.selenium_utils import (
     fill_form_field,
 )
 
-
-print("DEBUG selenium in navigation.py:")
-print("  sys.executable:", sys.executable)
-print("  selenium.__file__:", selenium.__file__)
-print("  webdriver.__file__:", selenium.webdriver.__file__)
-
 # ----------------------------------------
 # Custom Exception
 # ----------------------------------------

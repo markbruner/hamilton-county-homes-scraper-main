@@ -38,7 +38,7 @@ def upsert_sales_raw(
     df.columns = df.columns.str.lower()
 
     records: List[dict] = df.to_dict(orient="records")
-    print(records[0])
+
     total = 0
     for r in records:
         r["record_key"] = make_record_key(r)
