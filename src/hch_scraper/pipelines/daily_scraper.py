@@ -182,7 +182,7 @@ def _scrape_all_dates(
             all_data = all_data.replace({np.nan: None, np.inf: None, -np.inf: None})
             all_data.columns = all_data.columns.str.lower()
             all_data.columns = all_data.columns.str.replace(" ", "_")
-            logger.debug("Parts are showing like this: %s baths, %d total rooms",all_data.full_baths,all_data.total_rooms)
+            logger.info("Parts are showing like this: %s baths, %d total rooms",all_data["full_baths"],all_data["total_rooms"])
             upsert_sales_raw(
                 df=all_data,
                 supabase=supabase,
