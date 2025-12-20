@@ -176,12 +176,10 @@ def _detect_address_range(addr: str, housing_type: str):
         if not m:
             return None, None, addr, None
     
-    
-    print(m.groups())
     low, high, rest = m.groups()
 
     low_i, high_i = int(low), int(high)
-    print(low, high, rest)
+
     if housing_type in ('unit','condo'):
         addr_for_tagging = f"{low} {rest} UNIT {high}"
         return low, None, addr_for_tagging, "unit"
@@ -329,7 +327,7 @@ def tag_address(
         half_baths=bbb_dict.get("half_baths"),
         geom=None,
     )
-    logger.debug("Parts are showing like this: %s baths, %d total rooms",parts.full_baths,parts.total_rooms)
+    
     return parts, issues
 
 
