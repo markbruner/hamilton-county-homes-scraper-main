@@ -279,7 +279,7 @@ def tag_address(
 
     if (high_num is not None) and (int(high_num) - int(low_num) < 0):
         high_num = None
-    logger.info()
+
     usparsed = fix_alpha_address_number(usparsed)
 
     parts = AddressParts(
@@ -329,7 +329,7 @@ def tag_address(
         half_baths=bbb_dict.get("half_baths"),
         geom=None,
     )
-    logger.info("Parts are showing like this: %s baths, %d total rooms",parts.full_baths,parts.total_rooms)
+    logger.debug("Parts are showing like this: %s baths, %d total rooms",parts.full_baths,parts.total_rooms)
     return parts, issues
 
 
