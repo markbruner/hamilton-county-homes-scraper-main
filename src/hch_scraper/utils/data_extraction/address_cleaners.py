@@ -33,7 +33,7 @@ Key Features:
 # Pre-compiled regexes
 # ─────────────────────────────────────────────────────────────────────────────
 
-HYPHEN_RE = re.compile(r"\b(\d+)\s*-\s*(\d+)\b")
+HYPHEN_RE = re.compile(r"\b(\d+)\s*-\s*(\d+)+\s(.*)$\b")
 FRACTION_RE = re.compile(r"\b(\d+)\s+(\d+)/(\d+)\b")
 ORDINAL_RE = re.compile(r"\b\d+(?:st|nd|rd|th)\b", re.IGNORECASE)
 RANGE_PREFIX_RE = re.compile(r"^\s*(\d+)\s+(\d+)\s+(.*)$")
@@ -172,13 +172,16 @@ def _detect_address_range(addr: str, housing_type: str):
     """
     m = RANGE_PREFIX_RE.match(addr)
     if not m:
-        print(m)
-        return None, None, addr, None
-
+        m = HYPHEN_RE.match(addr)
+        if not m:
+            return None, None, addr, None
+    
+    
+    print(m.groups())
     low, high, rest = m.groups()
 
     low_i, high_i = int(low), int(high)
-
+    print(low, high, rest)
     if housing_type in ('unit','condo'):
         addr_for_tagging = f"{low} {rest} UNIT {high}"
         return low, None, addr_for_tagging, "unit"
@@ -252,8 +255,8 @@ def tag_address(
 
     use_code = _safe_int(row.get("use"))
     housing_type = USE_TO_HOUSING.get(use_code)  # "condo" | "apt" | "unit" | None
-    parcelid = row.get("parcel_number")
-    digits= parcelid.replace("-","")
+
+    digits= parcel_id.replace("-","")
     parcelid_join = f"0{digits[:11]}"
 
     bbb_dict = parse_bbb(row.get("bbb"))
@@ -276,7 +279,7 @@ def tag_address(
 
     if (high_num is not None) and (int(high_num) - int(low_num) < 0):
         high_num = None
-
+    logger.info()
     usparsed = fix_alpha_address_number(usparsed)
 
     parts = AddressParts(
@@ -326,7 +329,7 @@ def tag_address(
         half_baths=bbb_dict.get("half_baths"),
         geom=None,
     )
-
+    logger.info("Parts are showing like this: %s baths, %d total rooms",parts.full_baths,parts.total_rooms)
     return parts, issues
 
 
