@@ -57,5 +57,13 @@ def make_row_hash(row: dict) -> str:
         _get(row, "placename"),
         _get(row, "statename"),
         _get(row, "addresstype"),
+        _get(row, "address_range_type"),
+        _get(row, "update_type"),
+        _get(row, "parcelid_join"),
+        _get(row, "amount_num"),
+        _get(row, "total_rooms"),
+        _get(row, "bedrooms"),
+        _get(row, "full_baths"),
+        _get(row, "half_baths"),
     ]
     return sha256("|".join(parts).encode("utf-8")).hexdigest()
