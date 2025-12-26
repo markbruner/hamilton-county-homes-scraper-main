@@ -34,6 +34,7 @@ Key Features:
 # ─────────────────────────────────────────────────────────────────────────────
 
 HYPHEN_RE = re.compile(r"\b(\d+)\s*-\s*(\d+)+\s(.*)$\b")
+AMOUNT_RE = re.compile(r"^[$]\d+[,]\d+")
 FRACTION_RE = re.compile(r"\b(\d+)\s+(\d+)/(\d+)\b")
 ORDINAL_RE = re.compile(r"\b\d+(?:st|nd|rd|th)\b", re.IGNORECASE)
 RANGE_PREFIX_RE = re.compile(r"^\s*(\d+)\s+(\d+)\s+(.*)$")
@@ -119,12 +120,24 @@ class AddressParts:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _safe_int(x) -> Optional[int]:
+    if x is None:
+        return None
+
     try:
-        if x is None:
-            return None
-        # handles numpy ints, "550", "550.0", etc.
+        if isinstance(x, (int,)):
+            return x
+
+        # strings like "$123,456.00", "123,456", "550.0"
+        if isinstance(x, str):
+            cleaned = x.strip().replace("$", "").replace(",", "")
+            if cleaned == "":
+                return None
+            return int(float(cleaned))
+
+        # numpy, floats, decimals
         return int(float(x))
-    except (TypeError, ValueError):
+
+    except (ValueError, TypeError, OverflowError):
         return None
     
 def _preclean(addr: str) -> str:
@@ -260,6 +273,7 @@ def tag_address(
     bbb_dict = parse_bbb(row.get("bbb"))
 
     addr_clean = _move_leading_unit_token(addr_clean)
+    amount_num = _safe_int(row.get("amount"))
 
     # Detect space-separated number ranges like "1308 1310 WILLIAM H TAFT RD"
     low_num, high_num, addr_for_tagging, address_rng_type = _detect_address_range(
@@ -320,7 +334,7 @@ def tag_address(
         update_type=None,
         changed_fields=None,
         parcelid_join=parcelid_join,
-        amount_num=None,
+        amount_num=amount_num,
         total_rooms=bbb_dict.get("total_rooms"),
         bedrooms=bbb_dict.get("bedrooms"),
         full_baths=bbb_dict.get("full_baths"),
