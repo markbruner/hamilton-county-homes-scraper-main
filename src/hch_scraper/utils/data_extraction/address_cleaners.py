@@ -239,7 +239,7 @@ def parse_bbb(bbb) -> dict[str, int | None]:
     return {
         "total_rooms": _safe_int(parts[0]),
         "bedrooms": _safe_int(parts[1]),
-        "baths": _safe_int(parts[2]),
+        "full_baths": _safe_int(parts[2]),
         "half_baths": _safe_int(parts[3]),
     }
 
