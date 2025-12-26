@@ -169,7 +169,10 @@ def _scrape_all_dates(
         for start, end in ranges[:]:
             logger.info(f"Scraping from {start} to {end}")
             all_data = main(robots_txt_allowed, ScrapeRequest(start, end, ranges))
-
+            if all_data.empty:
+                logger.info("No new records; exiting cleanly.")
+                raise SystemExit(0)
+            
             all_data, addr_issues = _enrich_addresses(all_data)
 
             if "transfer_date" in all_data.columns:
@@ -306,12 +309,14 @@ def main(
             return pd.DataFrame(), check.dates, driver, check.modified
 
         data = get_csv_data(wait)
-
+        if data.empty and len(request.ranges) == 1:
+            logger.info(f"No data for {request.start}–{request.end}.")
+            return pd.DataFrame()
+            
         logger.info(
             f"Completed scraping for {request.start}–{request.end}: {data.shape[0]} rows."
         )
         check.dates.pop(0)
-        
         return data
 
     finally:
