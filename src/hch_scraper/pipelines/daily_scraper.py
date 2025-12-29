@@ -168,8 +168,15 @@ def _scrape_all_dates(
     while ranges[:]:
         for start, end in ranges[:]:
             logger.info(f"Scraping from {start} to {end}")
-            all_data = main(robots_txt_allowed, ScrapeRequest(start, end, ranges))
-            if all_data.empty:
+            all_data, updated_ranges, driver, modified = main(
+                robots_txt_allowed, ScrapeRequest(start, end, ranges)
+            )
+            ranges = updated_ranges
+            
+            if modified:
+                break
+
+            if len(all_data)==0:
                 logger.info("No new records; exiting cleanly.")
                 raise SystemExit(0)
             
@@ -311,13 +318,13 @@ def main(
         data = get_csv_data(wait)
         if data.empty and len(request.ranges) == 1:
             logger.info(f"No data for {request.start}–{request.end}.")
-            return pd.DataFrame()
+            return pd.DataFrame(), check.dates, driver, check.modified
             
         logger.info(
             f"Completed scraping for {request.start}–{request.end}: {data.shape[0]} rows."
         )
         check.dates.pop(0)
-        return data
+        return data, check.dates, driver, check.modified
 
     finally:
         safe_quit(driver)
