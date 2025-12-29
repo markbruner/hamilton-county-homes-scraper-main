@@ -318,13 +318,13 @@ def main(
         data = get_csv_data(wait)
         if data.empty and len(request.ranges) == 1:
             logger.info(f"No data for {request.start}–{request.end}.")
-            return pd.DataFrame()
+            return pd.DataFrame(), check.dates, driver, check.modified
             
         logger.info(
             f"Completed scraping for {request.start}–{request.end}: {data.shape[0]} rows."
         )
         check.dates.pop(0)
-        return data
+        return data, check.dates, driver, check.modified
 
     finally:
         safe_quit(driver)
