@@ -168,7 +168,14 @@ def _scrape_all_dates(
     while ranges[:]:
         for start, end in ranges[:]:
             logger.info(f"Scraping from {start} to {end}")
-            all_data = main(robots_txt_allowed, ScrapeRequest(start, end, ranges))
+            all_data, updated_ranges, driver, modified = main(
+                robots_txt_allowed, ScrapeRequest(start, end, ranges)
+            )
+            ranges = updated_ranges
+            
+            if modified:
+                break
+
             if len(all_data)==0:
                 logger.info("No new records; exiting cleanly.")
                 raise SystemExit(0)
