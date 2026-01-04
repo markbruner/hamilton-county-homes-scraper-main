@@ -1,6 +1,7 @@
 # Maps *every* commonly-seen spelling / abbreviation → canonical USPS suffix
 street_type_map: dict[str, str] = {
     # ――― A ―――
+    "AL": "ALLEY",
     "ALY": "ALLEY",
     "ALLEE": "ALLEY",
     "ALLY": "ALLEY",
@@ -367,6 +368,7 @@ street_type_map: dict[str, str] = {
     "PARKWY": "PARKWAY",
     "PKWAY": "PARKWAY",
     "PKY": "PARKWAY",
+    "PW": "PARKWAY",
     "PKWYS": "PARKWAYS",
     "PARKWAYS": "PARKWAYS",
     "PASS": "PASS",
@@ -490,6 +492,7 @@ street_type_map: dict[str, str] = {
     "SUMITT": "SUMMIT",
     "SUMMIT": "SUMMIT",
     # ――― T ―――
+    "TE": "TERRACE",
     "TER": "TERRACE",
     "TERR": "TERRACE",
     "TERRACE": "TERRACE",
@@ -504,6 +507,7 @@ street_type_map: dict[str, str] = {
     "TRACKS": "TRACKS",
     "TRFY": "TRAFFICWAY",
     "TRAFFICWAY": "TRAFFICWAY",
+    "TL": "TRAIL",
     "TRL": "TRAIL",
     "TRAIL": "TRAIL",
     "TRLS": "TRAILS",
@@ -511,6 +515,7 @@ street_type_map: dict[str, str] = {
     "TRLR": "TRAILER",
     "TRLRS": "TRAILER",
     "TRAILER": "TRAILER",
+    "TURN": "TURN",
     "TUNL": "TUNNEL",
     "TUNLS": "TUNNEL",
     "TUNEL": "TUNNEL",
@@ -722,6 +727,7 @@ canonical_to_abbrev: dict[str, str] = {
     "PASS": "PASS",
     "PASSAGE": "PSGE",
     "PATH": "PATH",
+    "PK":"PIKE",
     "PIKE": "PIKE",
     "PINE": "PNE",
     "PINES": "PNES",
