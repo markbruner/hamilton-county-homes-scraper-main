@@ -2,7 +2,7 @@ name: Daily Hamilton County Scrape
 
 on:
   schedule:
-    # Runs every day at 6:30 AM America/New_York
+    # Runs every day at 8:00 AM America/New_York
     # GitHub cron is in UTC → 6:30 AM ET = 11:30 UTC (standard time)
     - cron: "25 12 * * *"
   workflow_dispatch:  # allow manual runs from the Actions tab
