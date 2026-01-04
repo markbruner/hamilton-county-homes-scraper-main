@@ -79,6 +79,7 @@ street_type_map: dict[str, str] = {
     "CNTR": "CENTER",
     "CTRS": "CENTERS",
     "CENTERS": "CENTERS",
+    "CR": "CIRCLE",
     "CIR": "CIRCLE",
     "CIRC": "CIRCLE",
     "CIRCL": "CIRCLE",
