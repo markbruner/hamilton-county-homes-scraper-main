@@ -4,6 +4,11 @@ Scrapes public home sale and parcel data from the Hamilton County Auditor site,
 enriches addresses, and loads results into Supabase. Includes a scheduled
 pipeline used by GitHub Actions.
 
+## Project Overview
+This project automates a repeatable pipeline for collecting and enriching
+property sales data. It uses Selenium to export CSVs, normalizes addresses,
+optionally geocodes them, and upserts the results into Supabase for analysis.
+
 ## Features
 - Date-range scraping with pagination handling
 - Address normalization and geocoding enrichment
@@ -22,6 +27,7 @@ cd hamilton-county-homes-scraper-main
 python -m venv venv
 source venv/bin/activate  # Windows: .\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+pip install -e .
 ```
 
 ## Environment Variables
@@ -43,6 +49,23 @@ Daily range run (used by Actions):
 python -m hch_scraper daily --min_days_ago 1 --max_days_ago 3
 ```
 
+Alternative CLI (after `pip install -e .`):
+```bash
+hch-scrape
+hch-daily --min_days_ago 1 --max_days_ago 3
+```
+
+## Results
+- Upserts sales records into the `sales_hamilton` table in Supabase.
+- Downloads raw CSV exports to `data/raw/`.
+- Saves geocoding cache to `data/processed/`.
+
+## Tests
+```bash
+pip install pytest
+pytest
+```
+
 ## Project Layout
 ```
 src/hch_scraper/        Core package
@@ -57,3 +80,6 @@ scripts/                Shell helpers
 ## Notes
 - Downloaded CSVs are stored under `data/raw/` by default.
 - Geocoding cache is stored in `data/processed/`.
+
+## Architecture Diagram
+See `docs/architecture.md` for a high-level data flow diagram.

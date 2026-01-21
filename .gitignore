@@ -140,14 +140,9 @@ print
 
 logs/
 data/
-tests/
-
-README_AddressEnricher.md
-scripts/load_parcels_geojson.py
 
 # Local notebooks/data not intended for public repo
 notebooks/
 notebooks/*.ipynb
 notebooks/*.csv
-docs/
 
