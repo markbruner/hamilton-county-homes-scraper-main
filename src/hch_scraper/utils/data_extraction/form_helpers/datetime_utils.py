@@ -9,7 +9,6 @@ from selenium.webdriver.common.by import By
 
 from hch_scraper.utils.logging_setup import logger
 from hch_scraper.config.settings import XPATHS
-from hch_scraper.utils.data_extraction.form_helpers.selenium_utils import safe_quit
 
 
 @dataclass
@@ -181,7 +180,16 @@ def check_reset_needed(
         logger.warning(
             f"Search parameters between {start_dt} and {end_dt} yielded no results. Moving to next date range."
         )
-        safe_quit(driver)
+        updated_dates = dates.copy()
+        current = (_format_date_string(start_dt), _format_date_string(end_dt))
+        if updated_dates and updated_dates[0] == current:
+            updated_dates.pop(0)
+        return CheckReset(
+            reset_needed=True,
+            modified=False,
+            dates=updated_dates,
+            total_entries=total_entries,
+        )
 
     return CheckReset(
         reset_needed=False, modified=False, dates=dates, total_entries=total_entries

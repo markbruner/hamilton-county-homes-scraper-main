@@ -1,7 +1,7 @@
 """
 Main scraping pipeline for Hamilton County Auditor data.
 
-This script allows a user to scrape parcel data from the Hamilton County Auditor’s website
+This script allows a user to scrape parcel data from the Hamilton County Auditor's website
 over a specified date range. It handles date input, WebDriver setup, site navigation, data extraction,
 and CSV output, including logic to manage pagination and robot.txt checks.
 
@@ -95,7 +95,7 @@ class ScraperResult:
     final_end: str
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Hamilton County sales scraper")
 
     parser.add_argument(
@@ -112,7 +112,7 @@ def parse_args() -> argparse.Namespace:
         help="Oldest day to scrape (e.g. 3 = three days ago)",
     )
 
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def validate_args(args: argparse.Namespace) -> None:
@@ -148,6 +148,15 @@ def run_scraper_for_dates(dates: datetime, robots_txt_allowed: bool) -> ScraperR
     _scrape_all_dates(ranges, robots_txt_allowed, formatted_start, formatted_end)
 
 
+def _get_required_env(keys: List[str]) -> dict:
+    missing = [key for key in keys if not os.getenv(key)]
+    if missing:
+        raise ValueError(
+            f"Missing required environment variables: {', '.join(missing)}"
+        )
+    return {key: os.getenv(key) for key in keys}
+
+
 def _scrape_all_dates(
     ranges: List[Tuple[str, str]], robots_txt_allowed: bool, search_start, search_end
 ) -> pd.DataFrame:
@@ -161,8 +170,9 @@ def _scrape_all_dates(
     Returns:
         pd.DataFrame: Combined DataFrame of all scraped data.
     """
-    SUPABASE_URL = os.environ["SUPABASE_URL"]
-    SUPABASE_SERVICE_ROLE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+    env = _get_required_env(["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"])
+    SUPABASE_URL = env["SUPABASE_URL"]
+    SUPABASE_SERVICE_ROLE_KEY = env["SUPABASE_SERVICE_ROLE_KEY"]
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
     while ranges[:]:
@@ -180,7 +190,7 @@ def _scrape_all_dates(
                 logger.info("No new records; exiting cleanly.")
                 raise SystemExit(0)
             
-            all_data, addr_issues = _enrich_addresses(all_data)
+            all_data, _addr_issues = _enrich_addresses(all_data)
 
             if "transfer_date" in all_data.columns:
                 all_data["transfer_date"] = pd.to_datetime(
@@ -216,15 +226,16 @@ def _enrich_addresses(df: pd.DataFrame) -> pd.DataFrame:
     return pd.concat([df.reset_index(drop=True), enriched], axis=1), issues
 
 
-def run_scraper_pipeline():
+def run_scraper_pipeline(args: argparse.Namespace | None = None):
     """
     Executes the full scraping pipeline.
 
     Prompts the user for a date range, checks robots.txt permission,
     and runs the scraper for each date in the specified range.
     """
+    load_dotenv()
     tz = zoneinfo.ZoneInfo("America/New_York")
-    args = parse_args()
+    args = args or parse_args()
     validate_args(args)
 
     start_date = (datetime.now(tz) - timedelta(days=args.max_days_ago)).date()
@@ -317,11 +328,11 @@ def main(
 
         data = get_csv_data(wait)
         if data.empty and len(request.ranges) == 1:
-            logger.info(f"No data for {request.start}–{request.end}.")
+            logger.info(f"No data for {request.start} to {request.end}.")
             return pd.DataFrame(), check.dates, driver, check.modified
             
         logger.info(
-            f"Completed scraping for {request.start}–{request.end}: {data.shape[0]} rows."
+            f"Completed scraping for {request.start} to {request.end}: {data.shape[0]} rows."
         )
         check.dates.pop(0)
         return data, check.dates, driver, check.modified

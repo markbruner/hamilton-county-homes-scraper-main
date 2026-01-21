@@ -58,6 +58,9 @@ def save_cache_to_disk(cache: dict, filepath=CACHE_PATH):
         cache (dict): Dictionary containing geocoded parcel data.
         filepath (str): File path to save the cache.
     """
+    cache_dir = os.path.dirname(filepath)
+    if cache_dir:
+        os.makedirs(cache_dir, exist_ok=True)
     with open(filepath, "w") as f:
         json.dump(cache, f)
 
@@ -77,6 +80,9 @@ def get_geocodes(address: str, parcel_number: str) -> dict:
     Returns:
         dict: Dictionary of geocoding results (lat/lon, ZIP, confidence, etc.)
     """
+    if not API_KEY:
+        raise ValueError("Missing API_KEY environment variable for geocoding.")
+
     if parcel_number in geocode_cache:
         return geocode_cache[parcel_number]
 

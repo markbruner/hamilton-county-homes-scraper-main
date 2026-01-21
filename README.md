@@ -25,7 +25,7 @@ pip install -r requirements.txt
 ```
 
 ## Environment Variables
-Create a `.env` file in the repo root:
+Create a `.env` file in the repo root (see `.env.example`):
 ```
 SUPABASE_URL=your_supabase_url
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
@@ -35,12 +35,12 @@ API_KEY=your_positionstack_api_key
 ## Run Locally
 Interactive date range run:
 ```bash
-python -m hch_scraper.pipelines.scrape
+python -m hch_scraper scrape
 ```
 
 Daily range run (used by Actions):
 ```bash
-python -m hch_scraper.pipelines.daily_scraper --min_days_ago 1 --max_days_ago 3
+python -m hch_scraper daily --min_days_ago 1 --max_days_ago 3
 ```
 
 ## Project Layout
@@ -57,4 +57,3 @@ scripts/                Shell helpers
 ## Notes
 - Downloaded CSVs are stored under `data/raw/` by default.
 - Geocoding cache is stored in `data/processed/`.
-
