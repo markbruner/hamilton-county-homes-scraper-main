@@ -7,5 +7,5 @@ flowchart TD
   C --> D[CSV Download]
   D --> E[Address Parsing + Geocoding]
   E --> F[Supabase Upsert]
-  E --> G[Local Cache (data/processed)]
+  E --> G[Local Cache - data/processed]
 ```
