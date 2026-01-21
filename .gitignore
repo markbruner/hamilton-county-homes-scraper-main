@@ -26,9 +26,6 @@ share/python-wheels/
 *.egg
 MANIFEST
 
-# PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
 
@@ -147,6 +144,7 @@ tests/
 
 README_AddressEnricher.md
 scripts/load_parcels_geojson.py
+
 # Local notebooks/data not intended for public repo
 notebooks/
 notebooks/*.ipynb
