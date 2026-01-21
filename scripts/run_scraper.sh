@@ -7,5 +7,5 @@
 #    Uncomment and adjust if you use a venv at the repo root:
 # source ../.venv/bin/activate
 
-# 2) Run the scraper via the package entry point
-python -m hch_scraper.main "$@"
+# 2) Run the scraper via the package entry point (interactive date range)
+python -m hch_scraper.pipelines.scrape "$@"

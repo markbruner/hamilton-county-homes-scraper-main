@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hamilton-county-homes-scraper"
+version = "0.1.0"
+description = "Hamilton County Auditor homes scraper"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "selenium",
+    "requests",
+    "PyYAML",
+    "python-dotenv",
+    "numpy",
+    "pandas",
+    "spacy",
+    "lxml",
+    "RapidFuzz",
+    "geopy",
+    "word2number",
+    "usaddress",
+    "supabase",
+]
+
+[project.scripts]
+hch-scrape = "hch_scraper.pipelines.scrape:run_scraper_pipeline"
+hch-daily = "hch_scraper.pipelines.daily_scraper:run_scraper_pipeline"

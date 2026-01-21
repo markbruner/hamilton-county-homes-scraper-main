@@ -1,7 +1,7 @@
 """
 Main scraping pipeline for Hamilton County Auditor data.
 
-This script allows a user to scrape parcel data from the Hamilton County Auditor’s website
+This script allows a user to scrape parcel data from the Hamilton County Auditor's website
 over a specified date range. It handles date input, WebDriver setup, site navigation, data extraction,
 and CSV output, including logic to manage pagination and robot.txt checks.
 
@@ -119,7 +119,7 @@ def _ask_date(prompt: str) -> date:
             dt = datetime.strptime(s, "%m/%d/%Y")
             return dt.date()
         except ValueError:
-            print("↳ Invalid date format. Please use MM/DD/YYYY.")
+            print("Invalid date format. Please use MM/DD/YYYY.")
 
 
 def run_scraper_for_dates(dates: Dates, robots_txt_allowed: bool) -> None:
@@ -140,6 +140,15 @@ def run_scraper_for_dates(dates: Dates, robots_txt_allowed: bool) -> None:
     _scrape_all_dates(ranges, robots_txt_allowed, formatted_start, formatted_end)
 
 
+def _get_required_env(keys: List[str]) -> dict:
+    missing = [key for key in keys if not os.getenv(key)]
+    if missing:
+        raise ValueError(
+            f"Missing required environment variables: {', '.join(missing)}"
+        )
+    return {key: os.getenv(key) for key in keys}
+
+
 def _scrape_all_dates(
     ranges: List[Tuple[str, str]], robots_txt_allowed: bool, search_start, search_end
 ) -> None:
@@ -154,8 +163,9 @@ def _scrape_all_dates(
         pd.DataFrame: Combined DataFrame of all scraped data.
     """
 
-    SUPABASE_URL = os.environ["SUPABASE_URL"]
-    SUPABASE_SERVICE_ROLE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+    env = _get_required_env(["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"])
+    SUPABASE_URL = env["SUPABASE_URL"]
+    SUPABASE_SERVICE_ROLE_KEY = env["SUPABASE_SERVICE_ROLE_KEY"]
 
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
@@ -170,7 +180,7 @@ def _scrape_all_dates(
             if modified:
                 break
 
-            all_data, addr_issues = _enrich_addresses(all_data)
+            all_data, _addr_issues = _enrich_addresses(all_data)
 
             if "transfer_date" in all_data.columns:
                 all_data["transfer_date"] = pd.to_datetime(
@@ -212,6 +222,7 @@ def run_scraper_pipeline():
     Prompts the user for a date range, checks robots.txt permission,
     and runs the scraper for each date in the specified range.
     """
+    load_dotenv()
     dates = get_user_input()
     driver, wait = init_driver(URLS["base"])
 
@@ -312,7 +323,7 @@ def main(
         data = get_csv_data(wait)
 
         logger.info(
-            f"Completed scraping for {request.start}–{request.end}: {data.shape[0]} rows."
+            f"Completed scraping for {request.start} to {request.end}: {data.shape[0]} rows."
         )
         check.dates.pop(0)
         return data, check.dates, driver, check.modified

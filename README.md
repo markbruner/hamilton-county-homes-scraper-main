@@ -1,69 +1,59 @@
-# 🏠 Hamilton County Homes Web Scraper
-A webscraper for real estate data in Hamilton County Ohio
----
+# Hamilton County Homes Scraper
 
- **Data Collection Pipeline**  
-   - Scrapes home sale and parcel data  
-   - Performs geocoding to enrich addresses with latitude and longitude  
-   - Cleans and patches missing or inconsistent data  
+Scrapes public home sale and parcel data from the Hamilton County Auditor site,
+enriches addresses, and loads results into Supabase. Includes a scheduled
+pipeline used by GitHub Actions.
 
+## Features
+- Date-range scraping with pagination handling
+- Address normalization and geocoding enrichment
+- Supabase ingestion for cleaned results
+- Daily backfill pipeline for scheduled runs
 
+## Requirements
+- Python 3.11+
+- Firefox or Chrome with a matching WebDriver on PATH
+- Supabase project credentials
 
----
-
-## 🗂️ Project Structure
-
-hamilton-county-homes-scraper-main/ 
-    ├── src/hch_scraper # Core project code 
-    │ ├── config/ # Config files and selectors
-    | ├── repair/ # helps patch missing data from dataset
-    │ └── utils/ # Reusable helper functions ├
-    ├── .env # API keys or secrets (not committed) 
-    ├── driver_setup.py # Creates the driver
-    ├── main.py # Main script that runs the scraper
-    ├── scraper.py # Sets up 
-    ├── .gitignore 
-    ├── requirements.txt 
-    └── README.md
----
----
-## 🚀 Getting Started
-
-### 1. Clone the Repo
-git clone https://github.com/your-username/hamilton-county-homes-scraper-main.git
+## Quick Start
+```bash
+git clone https://github.com/<your-username>/hamilton-county-homes-scraper-main.git
 cd hamilton-county-homes-scraper-main
-
-### 2. Create a Virtual Environment
 python -m venv venv
-source venv/bin/activate  # On Windows: .\venv\Scripts\Activate.ps1
-
-### 3. Install Dependencies
+source venv/bin/activate  # Windows: .\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+```
 
-### 4. Set Environment Variables
-Create a .env file in the root directory with your API keys (e.g., for geocoding services):
-GEOCODING_API_KEY=your_key_here
+## Environment Variables
+Create a `.env` file in the repo root (see `.env.example`):
+```
+SUPABASE_URL=your_supabase_url
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+API_KEY=your_positionstack_api_key
+```
 
+## Run Locally
+Interactive date range run:
+```bash
+python -m hch_scraper scrape
+```
 
-🧪 How to Run
-### Run the scraper:
-python -m src.hch_scraper.main
+Daily range run (used by Actions):
+```bash
+python -m hch_scraper daily --min_days_ago 1 --max_days_ago 3
+```
 
-### Run the patching process:
-python -m src.hch_scraper.repair.patch_dataset
+## Project Layout
+```
+src/hch_scraper/        Core package
+  pipelines/            Entry points (scrape, daily_scraper)
+  drivers/              Selenium driver setup
+  io/                   Download and ingestion helpers
+  services/             Geocoding integrations
+  utils/                Data cleaning and helpers
+scripts/                Shell helpers
+```
 
-
-### 📌 Features
-* Batch geocoding with error handling and retries
-* Data cleaning for inconsistent addresses
-* Modular and testable architecture
-
-
-### 🛠️ Tech Stack
-* Python 3.11+
-*  Pandas
-* Selenium
-* OpenStreetMap / PositionStack (for geocoding)
-
-### 📬 Contact
-Created by Mark Bruner – feel free to reach out or contribute.
+## Notes
+- Downloaded CSVs are stored under `data/raw/` by default.
+- Geocoding cache is stored in `data/processed/`.
