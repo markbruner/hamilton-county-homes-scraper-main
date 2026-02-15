@@ -41,6 +41,8 @@ RANGE_PREFIX_RE = re.compile(r"^\s*(\d+)\s+(\d+)\s+(.*)$")
 UNIT_TOKEN_RE = re.compile(r"^\d+[A-Z]$|^\d+[A-Z]{1,2}$|^[A-Z]{1,2}\d+$", re.I)
 EXTRA_INFO_RE = re.compile(r"\s*\([A-Za-z]+\)\s*",re.IGNORECASE | re.VERBOSE,)
 NUMERIC_RE = re.compile(r"^\d+$")
+DECIMAL_DOT = re.compile(r"(?<=\d)\.(?=\d)")  # dot between digits
+PROTECT = "⟐"  # any rare placeholder char
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Property Use Type Dictionaries
@@ -155,9 +157,12 @@ def _preclean(addr: str) -> str:
     s = EXTRA_INFO_RE.sub(" ", s)
     s = re.sub(r"\s+", " ", s)
     s = FRACTION_RE.sub(_collapse_fraction, s)
+    s = DECIMAL_DOT.sub(PROTECT, s)
+    s =  re.sub(r"[^\w\s⟐\-/]", " ", s)
+    s = s.replace(PROTECT, ".")  
     return s
 
-def _move_leading_unit_token(addr: str) -> str:
+def _move_leading_unit_token(addr: str, housing_type: str) -> str:
     parts = addr.split()
     if len(parts) < 4:
         return addr
@@ -171,7 +176,13 @@ def _move_leading_unit_token(addr: str) -> str:
 
     # rewrite: "5757 1D CHEVIOT RD" -> "5757 CHEVIOT RD UNIT 1D"
     rest = " ".join(parts[2:])
-    return f"{house} {rest} UNIT {maybe_unit}"
+
+    if housing_type in ('unit','condo'):
+        return f"{house} {rest} UNIT {maybe_unit}"
+        
+    if housing_type == 'apt':
+        return f"{house} {rest} APT {maybe_unit}"
+
 
 def _detect_address_range(addr: str, housing_type: str):
     """
@@ -188,32 +199,37 @@ def _detect_address_range(addr: str, housing_type: str):
         m = HYPHEN_RE.match(addr)
         if not m:
             return None, None, addr, None
-    
+
     low, high, rest = m.groups()
 
     low_i, high_i = int(low), int(high)
-
-    if housing_type in ('unit','condo'):
-        addr_for_tagging = f"{low} {rest} UNIT {high}"
-        return low, None, addr_for_tagging, "unit"
-
-    if housing_type == 'apt':
-        addr_for_tagging = f"{low} {rest} APT {high}"
-        return low, None, addr_for_tagging, "apt"
     
     diff = high_i - low_i
+ 
     # Case 2: plausible address range
     if 1 <= diff <= 200:
-        addr_for_tagging = f"{low} {rest}"
-        return low, high, addr_for_tagging, "range"
+        if housing_type == 'apt':
+            addr_for_tagging = f"{low} {rest} APT {high}"
+            return low, None, addr_for_tagging, "apt"
+        else:
+            addr_for_tagging = f"{low} {rest}"
+            return low, high, addr_for_tagging, "range"
     
     if diff <= 0:
-        addr_for_tagging = f"{low} {rest} UNIT {high}"
-        return low, None, addr_for_tagging, "unit"
+        if housing_type in ('unit','condo'):
+            addr_for_tagging = f"{low} {rest} UNIT {high}"
+            return low, None, addr_for_tagging, "unit"
+        if housing_type == 'apt':
+            addr_for_tagging = f"{low} {rest} APT {high}"
+            return low, None, addr_for_tagging, "apt"
     
     if diff > 200 and high_i <= 6000:  # heuristic: reasonable unit size
-        addr_for_tagging = f"{low} {rest} UNIT {high}"
-        return low, None, addr_for_tagging, "unit"
+        if housing_type in ('unit','condo'):
+            addr_for_tagging = f"{low} {rest} UNIT {high}"
+            return low, None, addr_for_tagging, "unit"
+        if housing_type in ('apt'):
+            addr_for_tagging = f"{low} {rest} APT {high}"
+            return low, None, addr_for_tagging, "apt"
 
     return None, None, addr, "unknown"
 
@@ -265,6 +281,7 @@ def tag_address(
     parcel_id = row[parcel_col]
 
     use_code = _safe_int(row.get("use"))
+    
     housing_type = USE_TO_HOUSING.get(use_code)  # "condo" | "apt" | "unit" | None
 
     digits= parcel_id.replace("-","")
@@ -272,7 +289,7 @@ def tag_address(
 
     bbb_dict = parse_bbb(row.get("bbb"))
 
-    addr_clean = _move_leading_unit_token(addr_clean)
+    addr_clean = _move_leading_unit_token(addr_clean,housing_type)
     amount_num = _safe_int(row.get("amount"))
 
     # Detect space-separated number ranges like "1308 1310 WILLIAM H TAFT RD"

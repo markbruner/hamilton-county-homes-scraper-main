@@ -1,8 +1,9 @@
 # Hamilton County Homes Scraper
 
-Scrapes public home sale and parcel data from the Hamilton County Auditor site,
-enriches addresses, and loads results into Supabase. Includes a scheduled
-pipeline used by GitHub Actions.
+Automates daily ingestion of Hamilton County sales records into Supabase for downstream geospatial analytics. Designed for repeatable backfills, idempotent upserts, and scheduled operation via GitHub Actions.
+- Typical run pulls ~–Y records/day (or “hundreds to thousands” if you don’t want exact)
+- Backfills support arbitrary date windows
+- Upsert prevents duplicates across reruns
 
 ## Project Overview
 This project automates a repeatable pipeline for collecting and enriching
