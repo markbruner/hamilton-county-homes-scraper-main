@@ -194,7 +194,7 @@ def _detect_address_range(addr: str, housing_type: str):
     - low/high are strings or None
     - addr_for_tagging is what we send to usaddress, e.g. '1308 WILLIAM H TAFT RD'
     """
-    try:
+    if addr is not None:
         m = RANGE_PREFIX_RE.match(addr)
         if not m:
             m = HYPHEN_RE.match(addr)
@@ -206,7 +206,7 @@ def _detect_address_range(addr: str, housing_type: str):
         low_i, high_i = int(low), int(high)
         
         diff = high_i - low_i
-    
+
         # Case 2: plausible address range
         if 1 <= diff <= 200:
             if housing_type == 'apt':
@@ -231,8 +231,10 @@ def _detect_address_range(addr: str, housing_type: str):
             if housing_type in ('apt'):
                 addr_for_tagging = f"{low} {rest} APT {high}"
                 return low, None, addr_for_tagging, "apt"
-    except TypeError:
+
         return None, None, addr, "unknown"
+    
+    return None, None, addr, "unknown"
 
 
 def fix_alpha_address_number(parsed):
