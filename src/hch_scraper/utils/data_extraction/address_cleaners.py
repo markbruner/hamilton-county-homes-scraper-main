@@ -194,44 +194,45 @@ def _detect_address_range(addr: str, housing_type: str):
     - low/high are strings or None
     - addr_for_tagging is what we send to usaddress, e.g. '1308 WILLIAM H TAFT RD'
     """
-    m = RANGE_PREFIX_RE.match(addr)
-    if not m:
-        m = HYPHEN_RE.match(addr)
+    try:
+        m = RANGE_PREFIX_RE.match(addr)
         if not m:
-            return None, None, addr, None
+            m = HYPHEN_RE.match(addr)
+            if not m:
+                return None, None, addr, None
 
-    low, high, rest = m.groups()
+        low, high, rest = m.groups()
 
-    low_i, high_i = int(low), int(high)
+        low_i, high_i = int(low), int(high)
+        
+        diff = high_i - low_i
     
-    diff = high_i - low_i
- 
-    # Case 2: plausible address range
-    if 1 <= diff <= 200:
-        if housing_type == 'apt':
-            addr_for_tagging = f"{low} {rest} APT {high}"
-            return low, None, addr_for_tagging, "apt"
-        else:
-            addr_for_tagging = f"{low} {rest}"
-            return low, high, addr_for_tagging, "range"
-    
-    if diff <= 0:
-        if housing_type in ('unit','condo'):
-            addr_for_tagging = f"{low} {rest} UNIT {high}"
-            return low, None, addr_for_tagging, "unit"
-        if housing_type == 'apt':
-            addr_for_tagging = f"{low} {rest} APT {high}"
-            return low, None, addr_for_tagging, "apt"
-    
-    if diff > 200 and high_i <= 6000:  # heuristic: reasonable unit size
-        if housing_type in ('unit','condo'):
-            addr_for_tagging = f"{low} {rest} UNIT {high}"
-            return low, None, addr_for_tagging, "unit"
-        if housing_type in ('apt'):
-            addr_for_tagging = f"{low} {rest} APT {high}"
-            return low, None, addr_for_tagging, "apt"
-
-    return None, None, addr, "unknown"
+        # Case 2: plausible address range
+        if 1 <= diff <= 200:
+            if housing_type == 'apt':
+                addr_for_tagging = f"{low} {rest} APT {high}"
+                return low, None, addr_for_tagging, "apt"
+            else:
+                addr_for_tagging = f"{low} {rest}"
+                return low, high, addr_for_tagging, "range"
+        
+        if diff <= 0:
+            if housing_type in ('unit','condo'):
+                addr_for_tagging = f"{low} {rest} UNIT {high}"
+                return low, None, addr_for_tagging, "unit"
+            if housing_type == 'apt':
+                addr_for_tagging = f"{low} {rest} APT {high}"
+                return low, None, addr_for_tagging, "apt"
+        
+        if diff > 200 and high_i <= 6000:  # heuristic: reasonable unit size
+            if housing_type in ('unit','condo'):
+                addr_for_tagging = f"{low} {rest} UNIT {high}"
+                return low, None, addr_for_tagging, "unit"
+            if housing_type in ('apt'):
+                addr_for_tagging = f"{low} {rest} APT {high}"
+                return low, None, addr_for_tagging, "apt"
+    except TypeError:
+        return None, None, addr, "unknown"
 
 
 def fix_alpha_address_number(parsed):

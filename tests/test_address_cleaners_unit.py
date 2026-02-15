@@ -20,6 +20,14 @@ def test_detect_address_range_apartment():
     assert addr_for_tagging == "1308 WILLIAM H TAFT RD APT 1310"
     assert range_type == "apt"
 
+def test_detect_letters_apartment():
+    low, high, addr_for_tagging, range_type = ac._detect_address_range(
+        "2137 B&C FREEMAN AVE", "apt"
+    )
+    assert low == "2137"
+    assert addr_for_tagging == "1308 WILLIAM H TAFT RD APT 1310"
+    assert range_type == "apt"
+
 
 def test_coerce_address_number_words():
     assert ac._coerce_address_number("one hundred twenty three") == "123"
