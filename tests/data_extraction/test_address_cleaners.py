@@ -14,12 +14,14 @@ from hch_scraper.utils.data_extraction.address_cleaners import (
 # ─────────────────────────────────────────────────────────
 
 
-def make_row(addr: str | None, parcel: str = "028-0001-0151-00",bbb: str = "7-3-2-0") -> pd.Series:
+def make_row(addr: str | None, parcel: str = "603-0A23-0254-00",bbb: str = "6 - 2 - 2 - 0") -> pd.Series:
     return pd.Series(
         {
+        
             "address": addr,
             "parcel_number": parcel,
             "bbb": bbb,
+            "use": 550,
         }
     )
 
@@ -33,21 +35,20 @@ def test_tag_address_basic_success():
     Simple happy-path: standard address parses into AddressParts
     and returns no issues.
     """
-    row = make_row("3225-3227 RIVERSIDE DR")
+    row = make_row("230 #202 VINTAGE CLUB BLVD")
     parts, issues = tag_address(row, addr_col="address", parcel_col="parcel_number")
     
     assert issues == []
     assert isinstance(parts, AddressParts)
 
     # Spot-check a few core fields from usaddress
-    assert parts.ParcelNumber == "028-0001-0151-00"
-    assert parts.parcelid_join == "002800010151"
-    assert parts.AddressNumberLow == "3225"
-    assert parts.AddressNumberHigh == "3227"
-    assert parts.bedrooms == 3
-    assert parts.address_range_type == "range"
-    assert parts.StreetName  == "RIVERSIDE"
-    assert parts.StreetNamePostType  == "DR"
+    assert parts.ParcelNumber == "603-0A23-0254-00"
+    assert parts.parcelid_join == "06030A230254"
+    assert parts.OccupancyType == "UNIT"
+    assert parts.AddressNumber == "230"
+    assert parts.OccupancyIdentifier == "202"
+    assert parts.StreetName  == "VINTAGE CLUB"
+    assert parts.StreetNamePostType  == "BLVD"
 
 
 
@@ -188,7 +189,7 @@ def test_coerce_address_number_leaves_unparseable_values():
 def test_tag_address_range_space_separated():
     row = make_row("1308 1310 WILLIAM H TAFT RD")
     parts, issues = tag_address(row, addr_col="address", parcel_col="parcel_number")
-
+    print(parts)
     assert issues == []
     assert parts is not None
     assert parts.AddressNumber == "1308"
