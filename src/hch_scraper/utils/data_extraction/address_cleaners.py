@@ -158,7 +158,7 @@ def _preclean(addr: str) -> str:
     s = re.sub(r"\s+", " ", s)
     s = FRACTION_RE.sub(_collapse_fraction, s)
     s = DECIMAL_DOT.sub(PROTECT, s)
-    s =  re.sub(r"[^\w\s⟐\-/]", " ", s)
+    s =  re.sub(r"[^\w\s⟐\-/]", "", s)
     s = s.replace(PROTECT, ".")  
     return s
 
@@ -202,11 +202,18 @@ def _detect_address_range(addr: str, housing_type: str):
                 return None, None, addr, None
 
         low, high, rest = m.groups()
-
+        
         low_i, high_i = int(low), int(high)
         
         diff = high_i - low_i
 
+        if housing_type in ('unit','condo'):
+            addr_for_tagging = f"{low} {rest} UNIT {high}"
+            return low, None, addr_for_tagging, "unit"
+        if housing_type == 'apt':
+            addr_for_tagging = f"{low} {rest} APT {high}"
+            return low, None, addr_for_tagging, "apt"
+        
         # Case 2: plausible address range
         if 1 <= diff <= 200:
             if housing_type == 'apt':
@@ -281,6 +288,7 @@ def tag_address(
         return None, issues
 
     addr_clean = _preclean(addr_raw)
+  
     parcel_id = row[parcel_col]
 
     use_code = _safe_int(row.get("use"))

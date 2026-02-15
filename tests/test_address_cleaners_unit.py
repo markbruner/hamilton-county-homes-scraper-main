@@ -5,7 +5,7 @@ def test_detect_address_range_standard():
     low, high, addr_for_tagging, range_type = ac._detect_address_range(
         "1308 1310 WILLIAM H TAFT RD", None
     )
-    print(low, high, addr_for_tagging)
+
     assert low == "1308"
     assert high == "1310"
     assert addr_for_tagging == "1308 WILLIAM H TAFT RD"
