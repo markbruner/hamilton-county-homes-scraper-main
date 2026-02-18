@@ -43,12 +43,14 @@ EXTRA_INFO_RE = re.compile(r"\s*\([A-Za-z]+\)\s*",re.IGNORECASE | re.VERBOSE,)
 NUMERIC_RE = re.compile(r"^\d+$")
 DECIMAL_DOT = re.compile(r"(?<=\d)\.(?=\d)")  # dot between digits
 PROTECT = "⟐"  # any rare placeholder char
+UNIT_LETTER_RE = re.compile(r"^(\d+)\s+([A-DF-MO-VX-Z]{1}[-]?\d+?)\s+(.+)$")
+ALPHANUMERIC = re.compile(r'[A-DF-MO-VX-Z]{1}[-]?\d+?')
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Property Use Type Dictionaries
 # ─────────────────────────────────────────────────────────────────────────────
 
-CONDO_USES = {550, 552, 554, 558, 555}
+CONDO_USES = {550, 552, 554, 558, 555, 520, 530, 450}
 APT_USES   = {401, 402, 403, 404, 431}
 MF_USES    = {520, 530}
 
@@ -158,7 +160,7 @@ def _preclean(addr: str) -> str:
     s = re.sub(r"\s+", " ", s)
     s = FRACTION_RE.sub(_collapse_fraction, s)
     s = DECIMAL_DOT.sub(PROTECT, s)
-    s =  re.sub(r"[^\w\s⟐\-/]", " ", s)
+    s =  re.sub(r"[^\w\s⟐\-/]", "", s)
     s = s.replace(PROTECT, ".")  
     return s
 
@@ -194,19 +196,31 @@ def _detect_address_range(addr: str, housing_type: str):
     - low/high are strings or None
     - addr_for_tagging is what we send to usaddress, e.g. '1308 WILLIAM H TAFT RD'
     """
-    try:
+    if addr is not None:
         m = RANGE_PREFIX_RE.match(addr)
         if not m:
             m = HYPHEN_RE.match(addr)
             if not m:
-                return None, None, addr, None
+                m = UNIT_LETTER_RE.match(addr)
+                if not m:
+                    return None, None, addr, None
 
         low, high, rest = m.groups()
+        if ALPHANUMERIC.match(high):
+            diff = -1
+        elif _is_letter(high):
+            diff = -1
+        else:
+            low_i, high_i = int(low), int(high)
+            diff = high_i - low_i
 
-        low_i, high_i = int(low), int(high)
+        if housing_type in ('unit','condo'):
+            addr_for_tagging = f"{low} {rest} UNIT {high}"
+            return low, None, addr_for_tagging, "unit"
+        if housing_type == 'apt':
+            addr_for_tagging = f"{low} {rest} APT {high}"
+            return low, None, addr_for_tagging, "apt"
         
-        diff = high_i - low_i
-    
         # Case 2: plausible address range
         if 1 <= diff <= 200:
             if housing_type == 'apt':
@@ -231,9 +245,13 @@ def _detect_address_range(addr: str, housing_type: str):
             if housing_type in ('apt'):
                 addr_for_tagging = f"{low} {rest} APT {high}"
                 return low, None, addr_for_tagging, "apt"
-    except TypeError:
-        return None, None, addr, "unknown"
 
+        return None, None, addr, "unknown"
+    
+    return None, None, addr, "unknown"
+
+def _is_letter(x) -> bool:
+    return isinstance(x, str) and len(x) == 1 and x.isalpha()
 
 def fix_alpha_address_number(parsed):
     if "AddressNumber" in parsed:
@@ -279,6 +297,7 @@ def tag_address(
         return None, issues
 
     addr_clean = _preclean(addr_raw)
+  
     parcel_id = row[parcel_col]
 
     use_code = _safe_int(row.get("use"))

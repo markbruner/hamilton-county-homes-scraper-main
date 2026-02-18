@@ -205,7 +205,7 @@ def _scrape_all_dates(
             upsert_sales_raw(
                 df=all_data,
                 supabase=supabase,
-                schema_name="public",
+                schema_name="bronze",
                 table_name="sales_hamilton",
             )
 
