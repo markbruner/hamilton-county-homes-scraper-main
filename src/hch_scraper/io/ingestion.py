@@ -12,7 +12,7 @@ def upsert_sales_raw(
     df: pd.DataFrame,
     *,
     supabase: Client,
-    schema_name: str = "raw",
+    schema_name: str = "bronze",
     table_name: str = "sales_hamilton",
     batch_size: int = 500,
 ) -> int:
@@ -25,7 +25,7 @@ def upsert_sales_raw(
             Transfer Date, Amount.
         supabase: An authenticated Supabase Client (service-role).
         table_name: Target table, including schema if used.
-                    Default: 'raw.sales_hamilton'.
+                    Default: 'bronze.sales_hamilton'.
         batch_size: Number of rows per upsert batch (to avoid huge payloads).
 
     Returns:

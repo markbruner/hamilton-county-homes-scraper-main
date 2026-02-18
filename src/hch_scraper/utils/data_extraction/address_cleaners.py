@@ -43,12 +43,14 @@ EXTRA_INFO_RE = re.compile(r"\s*\([A-Za-z]+\)\s*",re.IGNORECASE | re.VERBOSE,)
 NUMERIC_RE = re.compile(r"^\d+$")
 DECIMAL_DOT = re.compile(r"(?<=\d)\.(?=\d)")  # dot between digits
 PROTECT = "⟐"  # any rare placeholder char
+UNIT_LETTER_RE = re.compile(r"^(\d+)\s+([A-DF-MO-VX-Z]{1}[-]?\d+?)\s+(.+)$")
+ALPHANUMERIC = re.compile(r'[A-DF-MO-VX-Z]{1}[-]?\d+?')
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Property Use Type Dictionaries
 # ─────────────────────────────────────────────────────────────────────────────
 
-CONDO_USES = {550, 552, 554, 558, 555}
+CONDO_USES = {550, 552, 554, 558, 555, 520, 530, 450}
 APT_USES   = {401, 402, 403, 404, 431}
 MF_USES    = {520, 530}
 
@@ -199,13 +201,18 @@ def _detect_address_range(addr: str, housing_type: str):
         if not m:
             m = HYPHEN_RE.match(addr)
             if not m:
-                return None, None, addr, None
+                m = UNIT_LETTER_RE.match(addr)
+                if not m:
+                    return None, None, addr, None
 
         low, high, rest = m.groups()
-        
-        low_i, high_i = int(low), int(high)
-        
-        diff = high_i - low_i
+        if ALPHANUMERIC.match(high):
+            diff = -1
+        elif _is_letter(high):
+            diff = -1
+        else:
+            low_i, high_i = int(low), int(high)
+            diff = high_i - low_i
 
         if housing_type in ('unit','condo'):
             addr_for_tagging = f"{low} {rest} UNIT {high}"
@@ -243,6 +250,8 @@ def _detect_address_range(addr: str, housing_type: str):
     
     return None, None, addr, "unknown"
 
+def _is_letter(x) -> bool:
+    return isinstance(x, str) and len(x) == 1 and x.isalpha()
 
 def fix_alpha_address_number(parsed):
     if "AddressNumber" in parsed:

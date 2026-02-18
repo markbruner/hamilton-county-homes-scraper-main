@@ -35,7 +35,7 @@ def test_tag_address_basic_success():
     Simple happy-path: standard address parses into AddressParts
     and returns no issues.
     """
-    row = make_row("817 #B HAWTHORNE AVE", use=550)
+    row = make_row("817 #B-2 HAWTHORNE AVE", use=550)
     parts, issues = tag_address(row, addr_col="address", parcel_col="parcel_number")
     
     assert issues == []
@@ -46,7 +46,7 @@ def test_tag_address_basic_success():
     assert parts.parcelid_join == "06030A230254"
     assert parts.OccupancyType == "UNIT"
     assert parts.AddressNumber == "817"
-    assert parts.OccupancyIdentifier == "B"
+    assert parts.OccupancyIdentifier == "B-2"
     assert parts.StreetName  == "HAWTHORNE"
     assert parts.StreetNamePostType  == "AVE"
 

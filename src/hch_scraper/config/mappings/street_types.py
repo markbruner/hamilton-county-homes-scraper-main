@@ -39,6 +39,7 @@ street_type_map: dict[str, str] = {
     "BOUL": "BOULEVARD",
     "BOULV": "BOULEVARD",
     "BOULEVARD": "BOULEVARD",
+    "BV":"BOULEVARD",
     "BR": "BRANCH",
     "BRNCH": "BRANCH",
     "BRANCH": "BRANCH",
