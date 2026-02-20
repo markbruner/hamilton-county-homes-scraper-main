@@ -43,7 +43,7 @@ def upsert_sales_raw(
     for r in records:
         r["record_key"] = make_record_key(r)
         r["row_hash"] = make_row_hash(r)
-        response = supabase.rpc("upsert_sales_hamilton_one", {"p": r}).execute()
+        response = supabase.rpc("upsert_sales_hamilton", {"p": r}).execute()
 
         # Optionally check for errors
         if getattr(response, "error", None):
