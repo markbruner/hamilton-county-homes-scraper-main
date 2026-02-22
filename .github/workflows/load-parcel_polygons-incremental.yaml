@@ -33,3 +33,10 @@ jobs:
 
       - name: Run CAGIS ZIP code load script
         run: bash src/hch_scraper/loaders/load_parcel_polygons_incremental.sh
+
+      - name: Upload GeoJSON artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cagis-parcel-polygons-geojson
+          path: geojson/cagis_parcel_polygons_layer.geojson
+          retention-days: 7
