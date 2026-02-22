@@ -1,4 +1,4 @@
-name: Load CAGIS ZIP Codes to Supabase
+name: Load CAGIS Parcel Polygons Updates to Supabase
 
 on:
   workflow_dispatch:
