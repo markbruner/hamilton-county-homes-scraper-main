@@ -31,22 +31,8 @@ jobs:
           ogrinfo --version
           ogr2ogr --version
           
-      - name: Debug file paths
-        run: |
-          echo "PWD:"
-          pwd
-          echo ""
-          echo "Repo root contents:"
-          ls -la
-          echo ""
-          echo "Scripts folder contents:"
-          ls -la scripts || true
-          echo ""
-          echo "Find your script:"
-          find . -maxdepth 4 -type f | sort
-          
       - name: Run CAGIS ZIP code load script
-        run: bash src/hch_scraper/loaders/load_cagis_zip_codes.sh
+        run: bash ./src/hch_scraper/loaders/load_zip_codes.sh
       
       - name: Upload GeoJSON artifact
         uses: actions/upload-artifact@v4

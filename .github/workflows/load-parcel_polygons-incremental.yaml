@@ -32,7 +32,7 @@ jobs:
           ogr2ogr --version
 
       - name: Run CAGIS ZIP code load script
-        run: bash src/hch_scraper/loaders/load_parcel_polygons_incremental.sh
+        run: bash ./src/hch_scraper/loaders/load_parcel_polygons_incremental.sh
 
       - name: Upload GeoJSON artifact
         uses: actions/upload-artifact@v4
