@@ -22,7 +22,6 @@ form_xpaths_list = [
 URLS = {
     "base": "https://www.hamiltoncountyauditor.org",
     "robots": "https://www.hamiltoncountyauditor.org/robots.txt",
-    "geocoding_api": "http://api.positionstack.com/v1/forward",
 }
 
 CACHE_PATHS = {
