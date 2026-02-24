@@ -875,7 +875,7 @@ street_prefix_map = {
     "PRT": "PORT",
 }
 
-direction_map = {
+direction_full_to_abbrev_map = {
     "SOUTH": "S",
     "NORTH": "N",
     "EAST": "E",
@@ -898,9 +898,6 @@ direction_abbrev_to_full = {
     "SE": "SOUTHEAST",
 }
 
-direction_full_to_abbrev = {v: k for k, v in direction_abbrev_to_full.items()}
-
-# Full → abbreviation (USPS canonical)
 direction_full_to_abbrev: dict[str, str] = {
     full: abbr for abbr, full in direction_abbrev_to_full.items()
 }

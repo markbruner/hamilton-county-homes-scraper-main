@@ -11,6 +11,7 @@ import logging
 from hch_scraper.config.mappings.street_types import (
     street_suffix_normalization_map,
     direction_normalization_map,
+    direction_abbrev_to_full,
 )
 from hch_scraper.config.mappings.secondary_units import secondary_unit_normalization_map
 
@@ -37,7 +38,11 @@ HYPHEN_RE = re.compile(r"\b(\d+)\s*-\s*(\d+)+\s(.*)$\b")
 AMOUNT_RE = re.compile(r"^[$]\d+[,]\d+")
 FRACTION_RE = re.compile(r"\b(\d+)\s+(\d+)/(\d+)\b")
 ORDINAL_RE = re.compile(r"\b\d+(?:st|nd|rd|th)\b", re.IGNORECASE)
+ADDRESS_NUM_SUFFIX_RE = re.compile(r"^(\d+)[-]?([a-zA-Z]+)", re.IGNORECASE)
+ALPHANUMERIC_ADDRESS_UNIT_NUM = re.compile(r"^(\d+)[-]?([a-zA-Z]+)\s+(\d+)\s+(.*)$")
 RANGE_PREFIX_RE = re.compile(r"^\s*(\d+)\s+(\d+)\s+(.*)$")
+UNIT_NUM_RANGE_RE = re.compile(r"(^\d+)\s+([0-9]?\-?[0-9a-df-mo-vx-zA-DF-MO-VX-Z])\s+(.*)")
+APT_NUM_RE = re.compile(r"(^\d+)\s+([a-zA-Z)])\s+?(\-?[0-9a-df-mo-vx-zA-DF-MO-VX-Z])\s(.*)")
 UNIT_TOKEN_RE = re.compile(r"^\d+[A-Z]$|^\d+[A-Z]{1,2}$|^[A-Z]{1,2}\d+$", re.I)
 EXTRA_INFO_RE = re.compile(r"\s*\([A-Za-z]+\)\s*",re.IGNORECASE | re.VERBOSE,)
 NUMERIC_RE = re.compile(r"^\d+$")
@@ -50,7 +55,7 @@ ALPHANUMERIC = re.compile(r'[A-DF-MO-VX-Z]{1}[-]?\d+?')
 # Property Use Type Dictionaries
 # ─────────────────────────────────────────────────────────────────────────────
 
-CONDO_USES = {550, 552, 554, 558, 555, 520, 530, 450}
+CONDO_USES = {550, 552, 554, 558, 555, 557, 520, 530, 450}
 APT_USES   = {401, 402, 403, 404, 431}
 MF_USES    = {520, 530}
 
@@ -160,7 +165,7 @@ def _preclean(addr: str) -> str:
     s = re.sub(r"\s+", " ", s)
     s = FRACTION_RE.sub(_collapse_fraction, s)
     s = DECIMAL_DOT.sub(PROTECT, s)
-    s =  re.sub(r"[^\w\s⟐\-/]", "", s)
+    s =  re.sub(r"[^a-zA-Z0-9\s\.\-\/\⟐]", "", s)
     s = s.replace(PROTECT, ".")  
     return s
 
@@ -203,9 +208,39 @@ def _detect_address_range(addr: str, housing_type: str):
             if not m:
                 m = UNIT_LETTER_RE.match(addr)
                 if not m:
+                    m = APT_NUM_RE.match(addr)
+                    if m:
+                        if housing_type in ('unit','condo'):
+                            numbers, apt1, apt2, rest = m.groups()
+                            addr_for_tagging = f"{numbers} {rest} UNIT {apt1}{apt2}"
+                            return numbers, None, addr_for_tagging, "unit"
+                        if housing_type == 'apt':
+                            numbers, apt1, apt2, rest = m.groups()
+                            addr_for_tagging = f"{numbers} {rest} APT {apt1}{apt2}"
+                            return numbers, None, addr_for_tagging, "apt"
+                    m = ALPHANUMERIC_ADDRESS_UNIT_NUM.match(addr)
+                    if m:
+                        if housing_type in ('unit','condo'):
+                            numbers, letters, unit, rest = m.groups()
+                            addr_for_tagging = f"{numbers}{letters} {rest} UNIT {unit}"
+                            return numbers, None, addr_for_tagging, "unit"
+                        if housing_type == 'apt':
+                            numbers, letters, unit, rest = m.groups()
+                            addr_for_tagging = f"{numbers}{letters} {rest} APT {unit}"
+                            return numbers, None, addr_for_tagging, "apt"
+                    m = UNIT_NUM_RANGE_RE.match(addr)
+                    if m:
+                        if housing_type in ('unit','condo'):
+                            numbers, unit, rest = m.groups()
+                            addr_for_tagging = f"{numbers} {rest} UNIT {unit}"
+                            return numbers, None, addr_for_tagging, "unit"
+                        if housing_type == 'apt':
+                            numbers, unit, rest = m.groups()
+                            addr_for_tagging = f"{numbers} {rest} APT {unit}"
+                            return numbers, None, addr_for_tagging, "apt"
                     return None, None, addr, None
-
         low, high, rest = m.groups()
+
         if ALPHANUMERIC.match(high):
             diff = -1
         elif _is_letter(high):
@@ -255,12 +290,12 @@ def _is_letter(x) -> bool:
 
 def fix_alpha_address_number(parsed):
     if "AddressNumber" in parsed:
-        if not re.search(r"\d", parsed["AddressNumber"]):
-            # Move it into StreetName
-            parsed["StreetName"] = (
-                parsed.get("StreetName", "") + " " + parsed["AddressNumber"]
-            ).strip()
-            del parsed["AddressNumber"]
+        if not re.search(r"^(\d+)?\.", parsed["AddressNumber"]):
+            m = ADDRESS_NUM_SUFFIX_RE.match(parsed["AddressNumber"])
+            if m:
+                number, letters = m.groups()
+                parsed["AddressNumber"] = number
+                parsed["AddressNumberSuffix"] = letters
     return parsed
 
 def parse_bbb(bbb) -> dict[str, int | None]:
@@ -311,7 +346,7 @@ def tag_address(
 
     addr_clean = _move_leading_unit_token(addr_clean,housing_type)
     amount_num = _safe_int(row.get("amount"))
-
+    
     # Detect space-separated number ranges like "1308 1310 WILLIAM H TAFT RD"
     low_num, high_num, addr_for_tagging, address_rng_type = _detect_address_range(
         addr_clean, housing_type
@@ -399,7 +434,7 @@ def normalize_address_parts(parts: AddressParts) -> AddressParts:
     # Pre-direction
     if parts.StreetNamePreDirectional:
         raw = parts.StreetNamePreDirectional.upper().rstrip(".")
-        normalized = direction_normalization_map.get(raw)
+        normalized = direction_abbrev_to_full.get(direction_normalization_map.get(raw, raw), raw)
         if normalized != raw:
             logger.debug(f"PreDirectional normalized: {raw} → {normalized}")
         data["StreetNamePreDirectional"] = normalized
@@ -411,7 +446,7 @@ def normalize_address_parts(parts: AddressParts) -> AddressParts:
 
     if parts.StreetNamePostDirectional:
         raw = parts.StreetNamePostDirectional.upper().rstrip(".")
-        normalized = direction_normalization_map.get(raw)
+        normalized = direction_abbrev_to_full.get(direction_normalization_map.get(raw, raw), raw)
         if normalized != raw:
             logger.debug(f"PostDirectional normalized: {raw} → {normalized}")
         data["StreetNamePostDirectional"] = normalized

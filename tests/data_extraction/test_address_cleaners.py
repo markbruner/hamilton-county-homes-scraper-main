@@ -1,5 +1,7 @@
 import pandas as pd
 import pytest
+from hch_scraper.pipelines.daily_scraper import _enrich_addresses
+from hch_scraper.io.ingestion import upsert_sales_raw
 
 from hch_scraper.utils.data_extraction.address_cleaners import (
     AddressParts,
@@ -35,20 +37,20 @@ def test_tag_address_basic_success():
     Simple happy-path: standard address parses into AddressParts
     and returns no issues.
     """
-    row = make_row("817 #B-2 HAWTHORNE AVE", use=550)
+    row = make_row("1935 G A CHAUCER DR", use=550)
+
     parts, issues = tag_address(row, addr_col="address", parcel_col="parcel_number")
-    
     assert issues == []
     assert isinstance(parts, AddressParts)
 
     # Spot-check a few core fields from usaddress
     assert parts.ParcelNumber == "603-0A23-0254-00"
     assert parts.parcelid_join == "06030A230254"
+    assert parts.AddressNumber == "1935"
+    assert parts.OccupancyIdentifier == "GA"
+    assert parts.StreetName  == "CHAUCER"
+    assert parts.StreetNamePostType  == "DR"
     assert parts.OccupancyType == "UNIT"
-    assert parts.AddressNumber == "817"
-    assert parts.OccupancyIdentifier == "B-2"
-    assert parts.StreetName  == "HAWTHORNE"
-    assert parts.StreetNamePostType  == "AVE"
 
 
 
@@ -104,11 +106,29 @@ def test_normalize_address_parts_usps_suffix_and_unit():
     # Street name uppercased
     assert norm.StreetName == parts.StreetName.upper()
 
-    # If usaddress gave us a directional, it should now be USPS abbrev
+    # If usaddress gave us a directional, it should now be full-word
     if norm.StreetNamePreDirectional:
-        assert norm.StreetNamePreDirectional in {"N", "S", "E", "W", "NE", "NW", "SE", "SW"}
+        assert norm.StreetNamePreDirectional in {
+            "NORTH",
+            "SOUTH",
+            "EAST",
+            "WEST",
+            "NORTHEAST",
+            "NORTHWEST",
+            "SOUTHEAST",
+            "SOUTHWEST",
+        }
     if norm.StreetNamePostDirectional:
-        assert norm.StreetNamePostDirectional in {"N", "S", "E", "W", "NE", "NW", "SE", "SW"}
+        assert norm.StreetNamePostDirectional in {
+            "NORTH",
+            "SOUTH",
+            "EAST",
+            "WEST",
+            "NORTHEAST",
+            "NORTHWEST",
+            "SOUTHEAST",
+            "SOUTHWEST",
+        }
 
     # Suffix normalized to USPS (e.g., ST, AVE, RD, etc.)
     if norm.StreetNamePostType:
@@ -196,3 +216,66 @@ def test_tag_address_range_space_separated():
     assert parts.AddressNumberLow == "1308"
     assert parts.AddressNumberHigh == "1310"
     assert parts.StreetName == "WILLIAM H TAFT"
+
+
+def test_enrich_addresses_keeps_unit_out_of_addressnumber():
+    df = pd.DataFrame(
+        [
+            {
+                "address": "1119 E E MCMILLAN AVE",
+                "parcel_number": "603-0A23-0254-00",
+                "bbb": "6 - 2 - 2 - 0",
+                "use": 550,
+            }
+        ]
+    )
+
+    enriched, issues = _enrich_addresses(df)
+
+    assert issues == []
+    assert enriched.loc[0, "AddressNumber"] == "1119"
+    assert enriched.loc[0, "OccupancyIdentifier"] is None
+    assert enriched.loc[0, "StreetNamePreDirectional"] == "EAST"
+    assert enriched.loc[0, "StreetName"] == "E MCMILLAN"
+
+
+def test_upsert_payload_addressnumber_is_house_number_only():
+    class _DummyResp:
+        error = None
+
+    class _DummyRpc:
+        def __init__(self, sink):
+            self._sink = sink
+
+        def execute(self):
+            self._sink.append(self.payload)
+            return _DummyResp()
+
+    class _DummySupabase:
+        def __init__(self):
+            self.calls = []
+
+        def rpc(self, _name, payload):
+            rpc = _DummyRpc(self.calls)
+            rpc.payload = payload
+            return rpc
+
+    df = pd.DataFrame(
+        [
+            {
+                "address": "4951 305 N ARBOR WOODS CT",
+                "parcel_number": "603-0A23-0254-00",
+                "bbb": "6 - 2 - 2 - 0",
+                "use": 550,
+                "transfer_date": "2026-02-20",
+            }
+        ]
+    )
+    enriched, _issues = _enrich_addresses(df)
+    supabase = _DummySupabase()
+
+    upsert_sales_raw(df=enriched, supabase=supabase)
+
+    payload = supabase.calls[0]["p"]
+    assert payload["addressnumber"] == "4951"
+    assert payload["occupancyidentifier"] == "305"

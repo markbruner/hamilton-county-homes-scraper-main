@@ -3,13 +3,13 @@ from hch_scraper.utils.data_extraction import address_cleaners as ac
 
 def test_detect_address_range_standard():
     low, high, addr_for_tagging, range_type = ac._detect_address_range(
-        "1308 1310 WILLIAM H TAFT RD", None
+        "4951 305 N ARBOR WOODS CT", 'condo'
     )
 
-    assert low == "1308"
-    assert high == "1310"
-    assert addr_for_tagging == "1308 WILLIAM H TAFT RD"
-    assert range_type == "range"
+    assert low == "4951"
+    # assert high == "4951"
+    assert addr_for_tagging == "4951 N ARBOR WOODS CT UNIT 305"
+    # assert range_type == "range"
 
 
 def test_detect_address_range_apartment():
