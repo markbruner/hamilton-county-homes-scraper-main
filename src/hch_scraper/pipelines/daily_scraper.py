@@ -191,7 +191,7 @@ def _scrape_all_dates(
                 raise SystemExit(0)
             
             all_data, _addr_issues = _enrich_addresses(all_data)
-
+            
             if "transfer_date" in all_data.columns:
                 all_data["transfer_date"] = pd.to_datetime(
                     all_data["transfer_date"], errors="coerce"
