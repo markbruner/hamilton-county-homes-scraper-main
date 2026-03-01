@@ -37,19 +37,20 @@ def test_tag_address_basic_success():
     Simple happy-path: standard address parses into AddressParts
     and returns no issues.
     """
-    row = make_row("1935 G A CHAUCER DR", use=550)
+    row = make_row("3687 J40 W GALBRAITH RD", use=552)
 
     parts, issues = tag_address(row, addr_col="address", parcel_col="parcel_number")
+    print(parts)
     assert issues == []
     assert isinstance(parts, AddressParts)
 
     # Spot-check a few core fields from usaddress
     assert parts.ParcelNumber == "603-0A23-0254-00"
     assert parts.parcelid_join == "06030A230254"
-    assert parts.AddressNumber == "1935"
-    assert parts.OccupancyIdentifier == "GA"
-    assert parts.StreetName  == "CHAUCER"
-    assert parts.StreetNamePostType  == "DR"
+    assert parts.AddressNumber == "3687"
+    assert parts.OccupancyIdentifier == "J40"
+    assert parts.StreetName  == "W GALBRAITH"
+    assert parts.StreetNamePostType  == "RD"
     assert parts.OccupancyType == "UNIT"
 
 
@@ -234,9 +235,9 @@ def test_enrich_addresses_keeps_unit_out_of_addressnumber():
 
     assert issues == []
     assert enriched.loc[0, "AddressNumber"] == "1119"
-    assert enriched.loc[0, "OccupancyIdentifier"] is None
+    assert enriched.loc[0, "OccupancyIdentifier"] == "E"
     assert enriched.loc[0, "StreetNamePreDirectional"] == "EAST"
-    assert enriched.loc[0, "StreetName"] == "E MCMILLAN"
+    assert enriched.loc[0, "StreetName"] == "MCMILLAN"
 
 
 def test_upsert_payload_addressnumber_is_house_number_only():

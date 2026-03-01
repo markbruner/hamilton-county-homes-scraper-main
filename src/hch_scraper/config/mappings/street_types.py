@@ -517,6 +517,7 @@ street_type_map: dict[str, str] = {
     "TRLRS": "TRAILER",
     "TRAILER": "TRAILER",
     "TURN": "TURN",
+    "TRN": "TURN",
     "TUNL": "TUNNEL",
     "TUNLS": "TUNNEL",
     "TUNEL": "TUNNEL",
@@ -786,6 +787,7 @@ canonical_to_abbrev: dict[str, str] = {
     "TRAILS": "TRLS",
     "TRAILER": "TRLR",
     "TUNNEL": "TUNL",
+    "TURN"  :   "TRN",
     "TURNPIKE": "TPKE",
     # ――― U ―――
     "UNDERPASS": "UPAS",

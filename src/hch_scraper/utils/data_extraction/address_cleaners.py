@@ -36,13 +36,13 @@ Key Features:
 
 HYPHEN_RE = re.compile(r"\b(\d+)\s*-\s*(\d+)+\s(.*)$\b")
 AMOUNT_RE = re.compile(r"^[$]\d+[,]\d+")
+NORM_ADDRESS_RE = re.compile(r"^\s*(\d+)\s+(.*)$")
 FRACTION_RE = re.compile(r"\b(\d+)\s+(\d+)/(\d+)\b")
 ORDINAL_RE = re.compile(r"\b\d+(?:st|nd|rd|th)\b", re.IGNORECASE)
 ADDRESS_NUM_SUFFIX_RE = re.compile(r"^(\d+)[-]?([a-zA-Z]+)", re.IGNORECASE)
 ALPHANUMERIC_ADDRESS_UNIT_NUM = re.compile(r"^(\d+)[-]?([a-zA-Z]+)\s+(\d+)\s+(.*)$")
 RANGE_PREFIX_RE = re.compile(r"^\s*(\d+)\s+(\d+)\s+(.*)$")
-UNIT_NUM_RANGE_RE = re.compile(r"(^\d+)\s+([0-9]?\-?[0-9a-df-mo-vx-zA-DF-MO-VX-Z])\s+(.*)")
-APT_NUM_RE = re.compile(r"(^\d+)\s+([a-zA-Z)])\s+?(\-?[0-9a-df-mo-vx-zA-DF-MO-VX-Z])\s(.*)")
+APT_NUM_RE = re.compile(r"(^\d+)\s+([0-9a-zA-Z]{0,2}\s?\-?[0-9a-df-mo-vx-zA-DF-MO-VX-Z]{0,1})\s+(.*)")
 UNIT_TOKEN_RE = re.compile(r"^\d+[A-Z]$|^\d+[A-Z]{1,2}$|^[A-Z]{1,2}\d+$", re.I)
 EXTRA_INFO_RE = re.compile(r"\s*\([A-Za-z]+\)\s*",re.IGNORECASE | re.VERBOSE,)
 NUMERIC_RE = re.compile(r"^\d+$")
@@ -202,86 +202,47 @@ def _detect_address_range(addr: str, housing_type: str):
     - addr_for_tagging is what we send to usaddress, e.g. '1308 WILLIAM H TAFT RD'
     """
     if addr is not None:
+        m = APT_NUM_RE.match(addr)
+        if m:
+            if housing_type in ('unit','condo'):
+                numbers, apt1, rest = m.groups()
+                addr_for_tagging = f"{numbers} {rest} UNIT {apt1}"
+                return numbers, None, addr_for_tagging, "unit"
+            if housing_type == 'apt':
+                numbers, apt1, rest = m.groups()
+                addr_for_tagging = f"{numbers} {rest} APT {apt1}"
+                return numbers, None, addr_for_tagging, "apt"
+        m = ALPHANUMERIC_ADDRESS_UNIT_NUM.match(addr)
+        if m:
+            if housing_type in ('unit','condo'):
+                numbers, letters, unit, rest = m.groups()
+                addr_for_tagging = f"{numbers}{letters} {rest} UNIT {unit}"
+                return numbers, None, addr_for_tagging, "unit"
+            if housing_type == 'apt':
+                numbers, letters, unit, rest = m.groups()
+                addr_for_tagging = f"{numbers}{letters} {rest} APT {unit}"
+                return numbers, None, addr_for_tagging, "apt"
         m = RANGE_PREFIX_RE.match(addr)
-        if not m:
-            m = HYPHEN_RE.match(addr)
-            if not m:
-                m = UNIT_LETTER_RE.match(addr)
-                if not m:
-                    m = APT_NUM_RE.match(addr)
-                    if m:
-                        if housing_type in ('unit','condo'):
-                            numbers, apt1, apt2, rest = m.groups()
-                            addr_for_tagging = f"{numbers} {rest} UNIT {apt1}{apt2}"
-                            return numbers, None, addr_for_tagging, "unit"
-                        if housing_type == 'apt':
-                            numbers, apt1, apt2, rest = m.groups()
-                            addr_for_tagging = f"{numbers} {rest} APT {apt1}{apt2}"
-                            return numbers, None, addr_for_tagging, "apt"
-                    m = ALPHANUMERIC_ADDRESS_UNIT_NUM.match(addr)
-                    if m:
-                        if housing_type in ('unit','condo'):
-                            numbers, letters, unit, rest = m.groups()
-                            addr_for_tagging = f"{numbers}{letters} {rest} UNIT {unit}"
-                            return numbers, None, addr_for_tagging, "unit"
-                        if housing_type == 'apt':
-                            numbers, letters, unit, rest = m.groups()
-                            addr_for_tagging = f"{numbers}{letters} {rest} APT {unit}"
-                            return numbers, None, addr_for_tagging, "apt"
-                    m = UNIT_NUM_RANGE_RE.match(addr)
-                    if m:
-                        if housing_type in ('unit','condo'):
-                            numbers, unit, rest = m.groups()
-                            addr_for_tagging = f"{numbers} {rest} UNIT {unit}"
-                            return numbers, None, addr_for_tagging, "unit"
-                        if housing_type == 'apt':
-                            numbers, unit, rest = m.groups()
-                            addr_for_tagging = f"{numbers} {rest} APT {unit}"
-                            return numbers, None, addr_for_tagging, "apt"
-                    return None, None, addr, None
-        low, high, rest = m.groups()
-
-        if ALPHANUMERIC.match(high):
-            diff = -1
-        elif _is_letter(high):
-            diff = -1
-        else:
-            low_i, high_i = int(low), int(high)
-            diff = high_i - low_i
-
-        if housing_type in ('unit','condo'):
-            addr_for_tagging = f"{low} {rest} UNIT {high}"
-            return low, None, addr_for_tagging, "unit"
-        if housing_type == 'apt':
-            addr_for_tagging = f"{low} {rest} APT {high}"
-            return low, None, addr_for_tagging, "apt"
-        
-        # Case 2: plausible address range
-        if 1 <= diff <= 200:
+        if m:
+            if housing_type in ('unit','condo'):
+                numbers, unit, rest = m.groups()
+                addr_for_tagging = f"{numbers} {rest} UNIT {unit}"
+                return numbers, None, addr_for_tagging, "unit"
             if housing_type == 'apt':
-                addr_for_tagging = f"{low} {rest} APT {high}"
-                return low, None, addr_for_tagging, "apt"
+                numbers, unit, rest = m.groups()
+                addr_for_tagging = f"{numbers} {rest} APT {unit}"
+                return numbers, None, addr_for_tagging, "apt"
             else:
+                low, high, rest = m.groups()
                 addr_for_tagging = f"{low} {rest}"
-                return low, high, addr_for_tagging, "range"
-        
-        if diff <= 0:
-            if housing_type in ('unit','condo'):
-                addr_for_tagging = f"{low} {rest} UNIT {high}"
-                return low, None, addr_for_tagging, "unit"
-            if housing_type == 'apt':
-                addr_for_tagging = f"{low} {rest} APT {high}"
-                return low, None, addr_for_tagging, "apt"
-        
-        if diff > 200 and high_i <= 6000:  # heuristic: reasonable unit size
-            if housing_type in ('unit','condo'):
-                addr_for_tagging = f"{low} {rest} UNIT {high}"
-                return low, None, addr_for_tagging, "unit"
-            if housing_type in ('apt'):
-                addr_for_tagging = f"{low} {rest} APT {high}"
-                return low, None, addr_for_tagging, "apt"
-
-        return None, None, addr, "unknown"
+                return low, high, addr_for_tagging, None
+        m = NORM_ADDRESS_RE.match(addr)
+        if m:
+            numbers, rest = m.groups()
+            addr_for_tagging = f"{numbers} {rest}"
+            return numbers, None, addr_for_tagging, None
+        if not m:
+            return None, None, addr, None
     
     return None, None, addr, "unknown"
 
