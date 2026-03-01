@@ -1,4 +1,4 @@
-name: Load CAGIS ZIP Codes to Supabase
+name: Load School Districts to Supabase
 
 on:
   workflow_dispatch:
@@ -31,5 +31,5 @@ jobs:
           ogrinfo --version
           ogr2ogr --version
           
-      - name: Run CAGIS ZIP code load script
+      - name: Run School District Load Script
         run: bash ./src/hch_scraper/loaders/load_school_districts.sh
