@@ -1,17 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-set -a
-source .env
-set +a
+if [ -f .env ]; then
+  set -a
+  source .env
+  set +a
+fi
 
 SHAPEFILE_PATH="data/raw/shapefiles/ohio-school-district-shapes/ohio-school-districts.shp"
 
+PG_CONN="PG:host=${SUPABASE_DB_HOST} port=${SUPABASE_DB_PORT} dbname=${SUPABASE_DB_NAME} user=${SUPABASE_DB_USER} password=${SUPABASE_DB_PASSWORD} sslmode=require"
+
+ogrinfo "$PG_CONN" -q -sql "DROP TABLE IF EXISTS bronze.school_districts_raw"
+
 ogr2ogr -f "PostgreSQL" \
-  "PG:host=${SUPABASE_DB_HOST} port=${SUPABASE_DB_PORT} dbname=${SUPABASE_DB_NAME} user=${SUPABASE_DB_USER} password=${SUPABASE_DB_PASSWORD} sslmode=require" \
+  "$PG_CONN" \
   "${SHAPEFILE_PATH}" \
-  -nln public.school_districts_raw \
-  -overwrite \
+  -nln school_districts_raw \
+  -lco SCHEMA=bronze \
   -lco GEOMETRY_NAME=geom \
   -nlt MULTIPOLYGON \
   -t_srs EPSG:4326
