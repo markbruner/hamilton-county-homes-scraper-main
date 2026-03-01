@@ -146,7 +146,7 @@ ogr2ogr -f "PostgreSQL" \
   "PG:host=${SUPABASE_DB_HOST} port=${SUPABASE_DB_PORT} dbname=${SUPABASE_DB_NAME} user=${SUPABASE_DB_USER} password=${SUPABASE_DB_PASSWORD} sslmode=require" \
   "${SHAPEFILE_PATH}" \
   -nln public.school_districts_raw \
-  -append \
+  -overwrite \
   -lco GEOMETRY_NAME=geom \
   -nlt MULTIPOLYGON \
   -t_srs EPSG:4326

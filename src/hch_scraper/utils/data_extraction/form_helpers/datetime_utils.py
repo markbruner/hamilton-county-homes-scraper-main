@@ -1,7 +1,8 @@
 import re
+import time
 import pandas as pd
 from datetime import datetime, date
-from typing import List, Tuple, Any, Union
+from typing import List, Tuple, Any, Union, Optional
 from dataclasses import dataclass
 
 from selenium.webdriver.support import expected_conditions as EC
@@ -22,7 +23,7 @@ class CheckReset:
     reset_needed: bool
     modified: bool
     dates: List[Tuple[datetime, datetime]]
-    total_entries: int
+    total_entries: Optional[int]
 
 
 def update_date_range_and_append(
@@ -108,6 +109,8 @@ def check_reset_needed(
     start: str,
     end: str,
     dates: List[Tuple[datetime, datetime]],
+    max_attempts: int = 3,
+    retry_delay_seconds: float = 1.5,
 ) -> CheckReset:
     """
     Checks if the search needs to be reset due to 1000 entries and updates the time slice.
@@ -128,32 +131,40 @@ def check_reset_needed(
     start_dt = _ensure_datetime(start, "start date")
     end_dt = _ensure_datetime(end, "end date")
 
-    try:
-        # A) ask DataTables directly
-        total_entries = _get_dt_record_count(driver)
+    total_entries = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            total_entries = _extract_total_entries_once(driver, wait)
+        except Exception as e:
+            raise ValueError(f"Failed to extract number of entries: {e}")
 
-        # B) fall back to parsing the status string
-        if total_entries is None:
-            try:
-                elem = wait.until(
-                    EC.presence_of_element_located(
-                        (By.XPATH, XPATHS["results"]["search_results_number"])
-                    )
-                )
-                raw_text = elem.text  # "Showing 1 to 10 of 121 entries"
-                # robust regex: look for "of <number> entries"
-                m = re.search(r"of\s+([\d,]+)\s+entries", raw_text, re.I)
-                if m:
-                    total_entries = int(m.group(1).replace(",", ""))
-                else:
-                    # last-ditch: take the largest number in the string
-                    nums = re.findall(r"\d+", raw_text)
-                    total_entries = int(max(nums)) if nums else None
-            except Exception:
-                total_entries = None
+        if total_entries is not None:
+            break
 
-    except Exception as e:
-        raise ValueError(f"Failed to extract number of entries: {e}")
+        if attempt < max_attempts:
+            logger.info(
+                "Could not determine result count for %s to %s on attempt %s/%s. Retrying in %.1fs.",
+                start,
+                end,
+                attempt,
+                max_attempts,
+                retry_delay_seconds,
+            )
+            time.sleep(retry_delay_seconds)
+
+    if total_entries is None:
+        logger.warning(
+            "Could not determine total search result entries for %s to %s. "
+            "Continuing without date-range split for this iteration.",
+            start,
+            end,
+        )
+        return CheckReset(
+            reset_needed=False,
+            modified=False,
+            dates=dates,
+            total_entries=None,
+        )
 
     if total_entries >= 1000:
         logger.info(
@@ -222,5 +233,26 @@ def _get_dt_record_count(driver):
             return table ? table.page.info().recordsDisplay : null;
         """
         )
+    except Exception:
+        return None
+
+
+def _extract_total_entries_once(driver, wait) -> Optional[int]:
+    # A) ask DataTables directly
+    total_entries = _get_dt_record_count(driver)
+    if total_entries is not None:
+        return total_entries
+
+    # B) fall back to parsing the status string
+    try:
+        elem = wait.until(
+            EC.presence_of_element_located((By.XPATH, XPATHS["results"]["search_results_number"]))
+        )
+        raw_text = elem.text
+        m = re.search(r"of\s+([\d,]+)\s+entries", raw_text, re.I)
+        if m:
+            return int(m.group(1).replace(",", ""))
+        nums = re.findall(r"\d+", raw_text)
+        return int(max(nums)) if nums else None
     except Exception:
         return None
