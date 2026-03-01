@@ -1,0 +1,35 @@
+name: Load CAGIS ZIP Codes to Supabase
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 10 30 1,4,7,10 *" # 6:30 AM ET-ish in Jan, Apr, Jul, and Oct
+
+jobs:
+  load-cagis-zip-codes:
+    runs-on: ubuntu-latest
+
+    env:
+      SUPABASE_DB_HOST: ${{ secrets.SUPABASE_DB_HOST }}
+      SUPABASE_DB_PORT: ${{ secrets.SUPABASE_DB_PORT }}
+      SUPABASE_DB_NAME: ${{ secrets.SUPABASE_DB_NAME }}
+      SUPABASE_DB_USER: ${{ secrets.SUPABASE_DB_USER }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install GDAL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gdal-bin
+
+      - name: Verify tools
+        run: |
+          curl --version
+          ogrinfo --version
+          ogr2ogr --version
+          
+      - name: Run CAGIS ZIP code load script
+        run: bash ./src/hch_scraper/loaders/load_school_districts.sh
