@@ -1,4 +1,4 @@
-name: Load Subdivion Boundaries to Supabase
+name: Load Subdivision Boundaries to Supabase
 
 on:
   workflow_dispatch:
