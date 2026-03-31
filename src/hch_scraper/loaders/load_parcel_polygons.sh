@@ -1,9 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-set -a
-source .env
-set +a
+if [ -f .env ]; then
+  set -a
+  source .env
+  set +a
+fi
+
+required_vars=(
+  SUPABASE_DB_HOST
+  SUPABASE_DB_PORT
+  SUPABASE_DB_NAME
+  SUPABASE_DB_USER
+  SUPABASE_DB_PASSWORD
+)
+
+for var_name in "${required_vars[@]}"; do
+  if [ -z "${!var_name:-}" ]; then
+    echo "Missing required environment variable: ${var_name}. Set it in the environment or repo-root .env." >&2
+    exit 1
+  fi
+done
 
 QUERY_URL="https://services.arcgis.com/JyZag7oO4NteHGiq/arcgis/rest/services/OpenData/FeatureServer/10/query"
 OUT_DIR="geojson"

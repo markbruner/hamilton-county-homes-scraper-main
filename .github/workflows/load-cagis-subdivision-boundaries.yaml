@@ -1,4 +1,4 @@
-name: Load Subdivion Boundaries to Supabase
+name: Load Subdivision Boundaries to Supabase
 
 on:
   workflow_dispatch:
@@ -6,7 +6,7 @@ on:
     - cron: "30 10 30 1,4,7,10 *" # 6:30 AM ET-ish in Jan, Apr, Jul, and Oct
 
 jobs:
-  load-cagis-zip-codes:
+  load-cagis-subdivision-boundaries:
     runs-on: ubuntu-latest
 
     env:
@@ -31,7 +31,7 @@ jobs:
           ogrinfo --version
           ogr2ogr --version
           
-      - name: Run CAGIS ZIP code load script
+      - name: Run CAGIS Subdivision Boundaries load script
         run: bash ./src/hch_scraper/loaders/load_subdivision_boundaries.sh
       
       - name: Upload GeoJSON artifact
