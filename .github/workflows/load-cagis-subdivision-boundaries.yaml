@@ -1,4 +1,4 @@
-name: Load CAGIS ZIP Codes to Supabase
+name: Load Subdivion Boundaries to Supabase
 
 on:
   workflow_dispatch:
