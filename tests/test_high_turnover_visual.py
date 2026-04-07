@@ -194,6 +194,7 @@ def test_yearly_turnover_figure_uses_blue_to_red_colorscale():
     fig = _build_yearly_turnover_figure(prepared, center)
 
     assert fig.data[0].colorscale == tuple((value, color) for value, color in BLUE_RED_COLORSCALE)
+    assert fig.data[0].type == "choroplethmap"
     assert "Alpha Acres" in fig.data[0].customdata[:, 1]
 
 
@@ -211,6 +212,7 @@ def test_yearly_turnover_figure_adds_selected_subdivision_highlight_trace():
 
     assert len(fig.data) == 2
     highlight = fig.data[1]
+    assert highlight.type == "choroplethmap"
     assert highlight.name == "Selected Subdivision"
     assert highlight.locations == ()
     assert highlight.z == ()
@@ -248,6 +250,7 @@ def test_yearly_turnover_figure_has_top_slider_without_title_or_animation_button
     fig = _build_yearly_turnover_figure(prepared, center)
 
     assert fig.layout.title.text is None
+    assert fig.layout.map.style == "open-street-map"
     assert len(fig.layout.updatemenus) == 0
     assert fig.layout.sliders[0].y > 1
     assert fig.layout.sliders[0].x == 0.08

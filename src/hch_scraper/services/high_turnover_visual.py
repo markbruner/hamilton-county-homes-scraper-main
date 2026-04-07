@@ -521,7 +521,7 @@ def _build_yearly_turnover_figure(
     if yearly_wgs84.empty:
         fig = go.Figure()
         fig.update_layout(
-            mapbox={
+            map={
                 "style": "open-street-map",
                 "center": {"lat": center.y, "lon": center.x},
                 "zoom": 10.5,
@@ -576,7 +576,7 @@ def _build_yearly_turnover_figure(
 
     fig = go.Figure(
         data=[
-            go.Choroplethmapbox(
+            go.Choroplethmap(
                 geojson=geojson,
                 locations=initial["planid"],
                 z=initial["turnover_pct"],
@@ -606,7 +606,7 @@ def _build_yearly_turnover_figure(
                     "<extra></extra>"
                 ),
             ),
-            go.Choroplethmapbox(
+            go.Choroplethmap(
                 geojson=geojson,
                 locations=[],
                 z=[],
@@ -627,7 +627,7 @@ def _build_yearly_turnover_figure(
             go.Frame(
                 name=str(year),
                 data=[
-                    go.Choroplethmapbox(
+                    go.Choroplethmap(
                         geojson=geojson,
                         locations=frame_data(year)["planid"],
                         z=frame_data(year)["turnover_pct"],
@@ -641,7 +641,7 @@ def _build_yearly_turnover_figure(
     )
 
     fig.update_layout(
-        mapbox={
+        map={
             "style": "open-street-map",
             "center": {"lat": center.y, "lon": center.x},
             "zoom": 10.5,
