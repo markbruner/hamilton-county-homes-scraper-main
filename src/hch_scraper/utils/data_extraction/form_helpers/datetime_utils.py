@@ -98,6 +98,7 @@ def update_date_range_and_append(
 
 
 def _format_date_string(dt: Union[date, datetime]) -> str:
+    """Format a date-like object as `MM/DD/YYYY`."""
     if not isinstance(dt, (datetime, date)):
         raise ValueError(f"Expected a datetime or date object, got {type(dt).__name__}")
     return dt.strftime("%m/%d/%Y")
@@ -208,6 +209,7 @@ def check_reset_needed(
 
 
 def _ensure_datetime(value: Any, description: str = "date") -> datetime:
+    """Convert an input value to `datetime`, raising a labeled error on failure."""
     if isinstance(value, datetime):
         return value
     try:
@@ -238,6 +240,7 @@ def _get_dt_record_count(driver):
 
 
 def _extract_total_entries_once(driver, wait) -> Optional[int]:
+    """Read the current result count from DataTables or the page status text."""
     # A) ask DataTables directly
     total_entries = _get_dt_record_count(driver)
     if total_entries is not None:

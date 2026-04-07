@@ -96,6 +96,7 @@ class ScraperResult:
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Parse CLI arguments for the date-windowed daily scraper."""
     parser = argparse.ArgumentParser(description="Hamilton County sales scraper")
 
     parser.add_argument(
@@ -116,6 +117,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def validate_args(args: argparse.Namespace) -> None:
+    """Validate daily scraper backfill bounds before the pipeline runs."""
     if args.min_days_ago >= args.max_days_ago:
         raise ValueError(
             f"min_days_ago ({args.min_days_ago}) must be < max_days_ago ({args.max_days_ago})"
@@ -149,6 +151,7 @@ def run_scraper_for_dates(dates: datetime, robots_txt_allowed: bool) -> ScraperR
 
 
 def _get_required_env(keys: List[str]) -> dict:
+    """Return required environment variables or raise when any are missing."""
     missing = [key for key in keys if not os.getenv(key)]
     if missing:
         raise ValueError(
@@ -211,6 +214,7 @@ def _scrape_all_dates(
 
 
 def _enrich_addresses(df: pd.DataFrame) -> pd.DataFrame:
+    """Append normalized parsed-address fields and collect parsing issues."""
     parsed = []
     issues = []
     df.columns = df.columns.str.lower()

@@ -334,6 +334,7 @@ def get_csv_data(wait, max_wait=30) -> pd.DataFrame:
 
 
 def _purge_existing_csvs(pattern):
+    """Delete any downloaded CSV files that match the scraper's search-results glob."""
     # Removes any .csv files that would keep the scraper from working properly
     for f in glob.glob(str(pattern)):
         try:

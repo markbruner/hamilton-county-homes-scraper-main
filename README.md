@@ -56,6 +56,23 @@ hch-scrape
 hch-daily --min_days_ago 1 --max_days_ago 3
 ```
 
+Similarity web demo:
+```bash
+python -m hch_scraper web-demo --host 127.0.0.1 --port 8000
+```
+Then open `http://127.0.0.1:8000` and search by parcel number or address to view similar homes and map pins.
+
+Similarity web demo from Supabase:
+```bash
+python -m hch_scraper web-demo --source supabase
+```
+This uses `SUPABASE_URL` and defaults to `SUPABASE_ANON_KEY` from `.env`. It defaults to `public.sales_enriched_api`. Map pins and distance require the view to include either `lat`/`lon` or `latitude`/`longitude`.
+
+To force the service role key instead:
+```bash
+python -m hch_scraper web-demo --source supabase --supabase-key-type service_role
+```
+
 ## Results
 - Upserts sales records into the `sales_hamilton` table in Supabase.
 - Downloads raw CSV exports to `data/raw/`.

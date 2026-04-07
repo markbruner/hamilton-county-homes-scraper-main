@@ -141,6 +141,7 @@ def run_scraper_for_dates(dates: Dates, robots_txt_allowed: bool) -> None:
 
 
 def _get_required_env(keys: List[str]) -> dict:
+    """Return required environment variables or raise when any are missing."""
     missing = [key for key in keys if not os.getenv(key)]
     if missing:
         raise ValueError(
@@ -200,6 +201,7 @@ def _scrape_all_dates(
 
 
 def _enrich_addresses(df: pd.DataFrame) -> pd.DataFrame:
+    """Append normalized parsed-address fields and collect parsing issues."""
     parsed = []
     issues = []
     df.columns = df.columns.str.lower()

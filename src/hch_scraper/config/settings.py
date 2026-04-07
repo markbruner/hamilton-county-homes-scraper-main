@@ -6,6 +6,7 @@ CONFIG_PATH = Path(__file__).parent / "selectors/xpaths.yaml"
 
 # Loading XPaths and other settings from YAML file
 def load_config(file_path):
+    """Load YAML configuration from disk and return the parsed mapping."""
     with open(file_path, "r") as file:
         return yaml.safe_load(file)
 

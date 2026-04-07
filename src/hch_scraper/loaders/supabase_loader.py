@@ -11,6 +11,7 @@ def _get(row: dict, *keys: str) -> str:
 
 
 def make_record_key(row: dict) -> str:
+    """Build a stable record identifier from parcel number and transfer date."""
     # Adjust these keys to match your DF columns
     parcel = _get(row, "parcel_number")
     transfer_date = _get(row, "transfer_date")
@@ -20,6 +21,7 @@ def make_record_key(row: dict) -> str:
 
 
 def make_row_hash(row: dict) -> str:
+    """Hash the core property fields used to detect row-level changes."""
     parts = [
         _get(row, "parcel_number"),
         _get(row, "address"),

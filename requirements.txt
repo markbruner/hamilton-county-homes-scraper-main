@@ -11,3 +11,8 @@ geopy
 word2number
 usaddress
 supabase
+pytest
+geopandas
+plotly
+psycopg2
+sqlalchemy

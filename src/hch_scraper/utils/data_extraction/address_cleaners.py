@@ -129,6 +129,7 @@ class AddressParts:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _safe_int(x) -> Optional[int]:
+    """Coerce common numeric string formats to integers without raising."""
     if x is None:
         return None
 
@@ -170,6 +171,7 @@ def _preclean(addr: str) -> str:
     return s
 
 def _move_leading_unit_token(addr: str, housing_type: str) -> str:
+    """Rewrite addresses whose unit designator appears immediately after the house number."""
     parts = addr.split()
     if len(parts) < 4:
         return addr
@@ -247,9 +249,11 @@ def _detect_address_range(addr: str, housing_type: str):
     return None, None, addr, "unknown"
 
 def _is_letter(x) -> bool:
+    """Return True when the value is a single alphabetic character."""
     return isinstance(x, str) and len(x) == 1 and x.isalpha()
 
 def fix_alpha_address_number(parsed):
+    """Split trailing alphabetic suffixes out of an address number token."""
     if "AddressNumber" in parsed:
         if not re.search(r"^(\d+)?\.", parsed["AddressNumber"]):
             m = ADDRESS_NUM_SUFFIX_RE.match(parsed["AddressNumber"])
@@ -260,6 +264,7 @@ def fix_alpha_address_number(parsed):
     return parsed
 
 def parse_bbb(bbb) -> dict[str, int | None]:
+    """Parse the `bbb` room summary string into room and bathroom counts."""
     if pd.isna(bbb):
         parts = []
     else:
@@ -384,6 +389,7 @@ def tag_address(
 
 
 def normalize_address_parts(parts: AddressParts) -> AddressParts:
+    """Normalize parsed address components to the project's canonical forms."""
     data = asdict(parts)
 
     # Address number
@@ -446,6 +452,7 @@ def normalize_address_parts(parts: AddressParts) -> AddressParts:
 
 
 def _collapse_fraction(m: re.Match) -> str:
+    """Convert mixed-number fractions like `915 1/2` into decimal text."""
     whole, num, den = m.groups()
     value = int(whole) + int(num) / int(den)  # 915 + 1/2 → 915.5
     return f"{value:g}".rstrip(".")

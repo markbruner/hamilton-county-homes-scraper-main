@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Hamilton County Similar Homes</title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    >
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero">
+        <p class="eyebrow">Property Similarity Demo</p>
+        <h1>Find comparable homes and plot them on a map.</h1>
+        <p class="lede">
+          Search by parcel number or address, then inspect the closest matches by score,
+          distance, size, beds, baths, and school district.
+        </p>
+      </section>
+
+      <section class="search-panel">
+        <label class="search-label" for="property-search">Parcel number or address</label>
+        <div class="search-row">
+          <input
+            id="property-search"
+            type="text"
+            placeholder="Try 001-0001-0043-00 or 6316 COFFEY STREET"
+            autocomplete="off"
+          >
+          <button id="search-button" type="button">Find Similar Homes</button>
+        </div>
+        <div id="search-results" class="search-results" hidden></div>
+      </section>
+
+      <section id="subject-card" class="subject-card" hidden></section>
+
+      <section class="content-grid">
+        <div class="results-panel">
+          <div class="section-heading">
+            <h2>Comparable Homes</h2>
+            <p id="results-summary">Search for a property to load results.</p>
+          </div>
+          <div id="similar-list" class="similar-list"></div>
+        </div>
+
+        <div class="map-panel">
+          <div class="section-heading">
+            <h2>Map View</h2>
+            <p>Blue pin is the selected home. Red pins are the ranked matches.</p>
+          </div>
+          <div id="map"></div>
+        </div>
+      </section>
+    </main>
+
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <script src="/app.js"></script>
+  </body>
+</html>

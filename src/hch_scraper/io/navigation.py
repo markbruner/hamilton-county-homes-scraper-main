@@ -43,8 +43,6 @@ class SafeClickError(Exception):
 def safe_click(
     wait: WebDriverWait, xpath: str, retries: int = 3, delay: int = 1, log: bool = True
 ) -> bool:
-    from selenium.webdriver.support import expected_conditions as EC
-
     """
     Clicks an element located by its XPath with retries and optional logging.
 
@@ -61,6 +59,8 @@ def safe_click(
     Raises:
         SafeClickError: If the element could not be clicked after all retries.
     """
+    from selenium.webdriver.support import expected_conditions as EC
+
     for attempt in range(1, retries + 1):
         try:
             element = wait.until(EC.element_to_be_clickable((By.XPATH, xpath)))
