@@ -15,10 +15,12 @@ pd.set_option('display.max_columns', None)
 
 int64_list = ["finsqft", "year_built","total_rooms","bedrooms","full_baths", "half_baths"]
 core_cols = ['parcel_number', 'transfer_year', 'centroid']
-BLUE_RED_COLORSCALE = [
-    [0.0, "#2a6f97"],
-    [1.0, "#a63d40"],
+TURNOVER_COLORSCALE = [
+    [0.0, "#5b1f48"],
+    [0.5, "#bf3f78"],
+    [1.0, "#f06a4d"],
 ]
+BLUE_RED_COLORSCALE = TURNOVER_COLORSCALE
 
 @dataclass(frozen=True)
 class HotspotConfig:
@@ -338,6 +340,8 @@ def _calculate_sales_by_year(sales_point_gdf, subdivision_grid_gdf):
     subdivision_columns = ["planid", "housing_stock", "geometry"]
     if "subdivision_name" in subdivision_grid_gdf.columns:
         subdivision_columns.append("subdivision_name")
+    if "school_district" in subdivision_grid_gdf.columns:
+        subdivision_columns.append("school_district")
 
     # Joining the all_parcels data to the parcel_sales data.
     parcel_sales_points_grid_gdf = gpd.sjoin(
@@ -517,7 +521,7 @@ def _build_yearly_turnover_figure(
         yearly_wgs84: gpd.GeoDataFrame,
         center: gpd.GeoSeries,
         ) -> go.Figure:
-    """Build a choropleth map with a Plotly year slider."""
+    """Build a choropleth map that the dashboard filters by year."""
     if yearly_wgs84.empty:
         fig = go.Figure()
         fig.update_layout(
@@ -571,8 +575,11 @@ def _build_yearly_turnover_figure(
         ].to_numpy()
 
     initial = frame_data(base_year)
-    max_turnover = yearly_wgs84["turnover_pct"].max()
-    color_max = float(max_turnover)
+    initial_turnover = initial["turnover_pct"].dropna()
+    color_min = float(initial_turnover.min()) if not initial_turnover.empty else 0
+    color_max = float(initial_turnover.max()) if not initial_turnover.empty else 1
+    if color_min == color_max:
+        color_max = color_min + 1
 
     fig = go.Figure(
         data=[
@@ -582,8 +589,8 @@ def _build_yearly_turnover_figure(
                 z=initial["turnover_pct"],
                 featureidkey="properties.planid",
                 customdata=customdata(initial),
-                colorscale=BLUE_RED_COLORSCALE,
-                zmin=0,
+                colorscale=TURNOVER_COLORSCALE,
+                zmin=color_min,
                 zmax=color_max,
                 marker_opacity=0.68,
                 marker_line_width=0.7,
@@ -623,21 +630,6 @@ def _build_yearly_turnover_figure(
                 name="Selected Subdivision",
             )
         ],
-        frames=[
-            go.Frame(
-                name=str(year),
-                data=[
-                    go.Choroplethmap(
-                        geojson=geojson,
-                        locations=frame_data(year)["planid"],
-                        z=frame_data(year)["turnover_pct"],
-                        featureidkey="properties.planid",
-                        customdata=customdata(frame_data(year)),
-                    )
-                ],
-            )
-            for year in years
-        ],
     )
 
     fig.update_layout(
@@ -646,32 +638,7 @@ def _build_yearly_turnover_figure(
             "center": {"lat": center.y, "lon": center.x},
             "zoom": 10.5,
         },
-        margin=dict(r=0, l=0, b=0, t=70),
-        sliders=[
-            {
-                "active": 0,
-                "currentvalue": {"prefix": "Year: "},
-                "x": 0.08,
-                "y": 1.08,
-                "len": 0.84,
-                "pad": {"t": 0, "b": 12},
-                "steps": [
-                    {
-                        "label": str(year),
-                        "method": "animate",
-                        "args": [
-                            [str(year)],
-                            {
-                                "mode": "immediate",
-                                "frame": {"duration": 0, "redraw": True},
-                                "transition": {"duration": 250},
-                            },
-                        ],
-                    }
-                    for year in years
-                ],
-            }
-        ],
+        margin=dict(r=0, l=0, b=0, t=20),
     )
 
     return fig
@@ -692,6 +659,8 @@ def _build_dashboard_html(
     )
     detail_payload = _build_detail_payload(yearly_wgs84)
     map_rows_payload = _build_map_rows_payload(yearly_wgs84)
+    school_district_payload = _build_school_district_payload(yearly_wgs84)
+    default_map_view = _build_default_map_view(fig)
     leaderboard_html = _build_leaderboard_html(hotspot_persistence_wgs84)
     initial_detail = _build_initial_detail_html(hotspot_persistence_wgs84)
 
@@ -889,8 +858,81 @@ def _build_dashboard_html(
       }}
       .map-controls {{
         display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
         justify-content: flex-end;
         margin: 0 0 10px;
+      }}
+      .year-filter {{
+        position: relative;
+        display: inline-block;
+      }}
+      .district-control,
+      .year-dropdown-button {{
+        min-height: 40px;
+        padding: 9px 32px 9px 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fffdf8;
+        color: var(--text);
+        font: inherit;
+        font-size: 0.94rem;
+        cursor: pointer;
+      }}
+      .year-dropdown-button {{
+        min-width: 148px;
+        text-align: left;
+      }}
+      .year-dropdown-button::after {{
+        content: "v";
+        position: absolute;
+        right: 12px;
+        color: var(--muted);
+      }}
+      .year-dropdown {{
+        position: absolute;
+        z-index: 5;
+        top: calc(100% + 6px);
+        right: 0;
+        min-width: 170px;
+        display: grid;
+        gap: 4px;
+        padding: 8px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fffdf8;
+        box-shadow: var(--shadow);
+      }}
+      .year-dropdown[hidden] {{
+        display: none;
+      }}
+      .year-option {{
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        width: 100%;
+        min-height: 34px;
+        padding: 7px 8px;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        color: var(--text);
+        font: inherit;
+        font-size: 0.94rem;
+        text-align: left;
+        cursor: pointer;
+      }}
+      .year-option:hover,
+      .year-option.is-selected {{
+        background: rgba(191, 63, 120, 0.12);
+      }}
+      .year-option.is-selected::after {{
+        content: "Selected";
+        color: var(--accent-dark);
+        font-size: 0.72rem;
+        text-transform: uppercase;
       }}
       .toggle-control {{
         display: inline-flex;
@@ -947,8 +989,8 @@ def _build_dashboard_html(
           <p class="eyebrow">Turnover Hotspot Explorer</p>
           <h1>See where subdivision turnover persists over time.</h1>
           <p class="lede">
-            Use the year slider to compare annual turnover rates. Click a subdivision on
-            the map or a leaderboard row to inspect the yearly details and persistent
+            Choose one or more years to compare annual turnover rates. Click a subdivision
+            on the map or a leaderboard row to inspect the yearly details and persistent
             hotspot summary.
           </p>
         </div>
@@ -984,7 +1026,16 @@ def _build_dashboard_html(
         </aside>
 
         <section class="map-panel">
-          <div class="map-controls">
+          <div class="map-controls" aria-label="Map filters">
+            <select id="school-district-select" class="district-control" aria-label="School district">
+              <option value="">All school districts</option>
+            </select>
+            <div class="year-filter">
+              <button id="year-filter-button" class="year-dropdown-button" type="button" aria-haspopup="listbox" aria-expanded="false">
+                All years
+              </button>
+              <div id="year-dropdown" class="year-dropdown" role="listbox" aria-label="Map years" aria-multiselectable="true" hidden></div>
+            </div>
             <label class="toggle-control" for="hotspots-only-toggle">
               <input id="hotspots-only-toggle" type="checkbox">
               Show hotspots only
@@ -998,13 +1049,23 @@ def _build_dashboard_html(
     <script>
       const turnoverDetails = {json.dumps(detail_payload, allow_nan=False)};
       const mapRowsByYear = {json.dumps(map_rows_payload, allow_nan=False)};
+      const schoolDistricts = {json.dumps(school_district_payload, allow_nan=False)};
+      const defaultMapView = {json.dumps(default_map_view, allow_nan=False)};
       const detailPanel = document.getElementById("subdivision-detail");
       const mapDiv = document.getElementById("turnover-map");
       const hotspotsOnlyToggle = document.getElementById("hotspots-only-toggle");
+      const schoolDistrictSelect = document.getElementById("school-district-select");
+      const yearFilterButton = document.getElementById("year-filter-button");
+      const yearDropdown = document.getElementById("year-dropdown");
+      const availableMapYears = Object.keys(mapRowsByYear)
+        .sort((left, right) => Number(left) - Number(right));
       const HIGHLIGHT_TRACE_INDEX = 1;
       const MAIN_TRACE_INDEX = 0;
       let selectedPlanid = null;
       let currentMapYear = getInitialMapYear();
+      let selectedMapYears = new Set();
+      let selectedSchoolDistrict = "";
+      const yearDropdownOptions = buildYearDropdown();
 
       function metric(label, value) {{
         return `<div class="metric"><span>${{escapeHtml(label)}}</span><strong>${{escapeHtml(value ?? "-")}}</strong></div>`;
@@ -1039,23 +1100,124 @@ def _build_dashboard_html(
       }}
 
       function getInitialMapYear() {{
-        const firstDetail = Object.values(turnoverDetails)[0];
-        return firstDetail?.yearly?.[0]?.transfer_year ?? null;
+        return availableMapYears[0] ?? null;
       }}
 
-      function mapRowsForYear(year) {{
-        const rows = mapRowsByYear[String(year)] ?? [];
+      function populateSchoolDistrictSelect() {{
+        if (!schoolDistrictSelect) {{
+          return;
+        }}
+        Object.entries(schoolDistricts)
+          .sort(([, left], [, right]) => left.label.localeCompare(right.label))
+          .forEach(([district, config]) => {{
+            const option = document.createElement("option");
+            option.value = district;
+            option.textContent = config.label;
+            schoolDistrictSelect.append(option);
+          }});
+      }}
+
+      function zoomToSchoolDistrict(district) {{
+        const config = schoolDistricts[district];
+        const view = config ?? defaultMapView;
+        Plotly.relayout(mapDiv, {{
+          "map.center.lat": view.center.lat,
+          "map.center.lon": view.center.lon,
+          "map.zoom": view.zoom,
+        }});
+      }}
+
+      function buildYearDropdown() {{
+        if (!yearDropdown) {{
+          return [];
+        }}
+        return availableMapYears.map((year) => {{
+          const option = document.createElement("button");
+          option.className = "year-option";
+          option.type = "button";
+          option.dataset.year = year;
+          option.setAttribute("role", "option");
+          option.textContent = year;
+          yearDropdown.append(option);
+          return option;
+        }});
+      }}
+
+      function setYearDropdownOpen(isOpen) {{
+        if (!yearDropdown || !yearFilterButton) {{
+          return;
+        }}
+        yearDropdown.hidden = !isOpen;
+        yearFilterButton.setAttribute("aria-expanded", String(isOpen));
+      }}
+
+      function mapRowsForSelection() {{
+        let rows = aggregateSelectedYearRows();
+        if (selectedSchoolDistrict) {{
+          rows = rows.filter((row) => row.school_district === selectedSchoolDistrict);
+        }}
         if (hotspotsOnlyToggle?.checked) {{
           return rows.filter((row) => row.is_hotspot);
         }}
         return rows;
       }}
 
+      function aggregateSelectedYearRows() {{
+        const groups = new Map();
+        const selectedYears = selectedYearValues();
+        for (const year of selectedYears) {{
+          for (const row of mapRowsByYear[String(year)] ?? []) {{
+            const planid = String(row.planid);
+            if (!groups.has(planid)) {{
+              groups.set(planid, {{
+                ...row,
+                transfer_year: selectedYearsLabel(),
+                parcels_sold: 0,
+                turnover_pct: 0,
+                hotspot_threshold_pct: 0,
+                is_hotspot: false,
+                is_hotspot_label: "No",
+                selected_year_count: 0,
+              }});
+            }}
+            const group = groups.get(planid);
+            group.parcels_sold += Number(row.parcels_sold) || 0;
+            group.turnover_pct += Number(row.turnover_pct) || 0;
+            group.hotspot_threshold_pct += Number(row.hotspot_threshold_pct) || 0;
+            group.is_hotspot = group.is_hotspot || Boolean(row.is_hotspot);
+            group.selected_year_count += 1;
+          }}
+        }}
+        return Array.from(groups.values()).map((row) => ({{
+          ...row,
+          turnover_pct: roundMetric(row.turnover_pct / row.selected_year_count),
+          hotspot_threshold_pct: roundMetric(row.hotspot_threshold_pct / row.selected_year_count),
+          is_hotspot_label: row.is_hotspot ? "Yes" : "No",
+        }}));
+      }}
+
+      function selectedYearValues() {{
+        const values = Array.from(selectedMapYears);
+        return values.length ? values : availableMapYears;
+      }}
+
+      function selectedYearsLabel() {{
+        const years = selectedYearValues();
+        if (years.length === availableMapYears.length) {{
+          return "All";
+        }}
+        return years.join(", ");
+      }}
+
+      function roundMetric(value) {{
+        return Math.round((Number(value) || 0) * 100) / 100;
+      }}
+
       function rowCustomdata(rows) {{
         return rows.map((row) => [
           row.planid,
           row.subdivision_label,
-          row.transfer_year,
+          selectedYearsLabel(),
           row.housing_stock,
           row.parcels_sold,
           row.turnover_pct,
@@ -1068,13 +1230,16 @@ def _build_dashboard_html(
       }}
 
       function refreshMapTrace() {{
-        const rows = mapRowsForYear(currentMapYear);
+        const rows = mapRowsForSelection();
+        const range = turnoverRange(rows);
         Plotly.restyle(
           mapDiv,
           {{
             locations: [rows.map((row) => row.planid)],
             z: [rows.map((row) => row.turnover_pct)],
             customdata: [rowCustomdata(rows)],
+            zmin: [range.min],
+            zmax: [range.max],
           }},
           [MAIN_TRACE_INDEX]
         );
@@ -1083,8 +1248,47 @@ def _build_dashboard_html(
         }}
       }}
 
+      function turnoverRange(rows) {{
+        const values = rows
+          .map((row) => Number(row.turnover_pct))
+          .filter((value) => Number.isFinite(value));
+        if (!values.length) {{
+          return {{min: 0, max: 1}};
+        }}
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        return min === max ? {{min, max: min + 1}} : {{min, max}};
+      }}
+
+      function syncYearDropdown() {{
+        if (yearFilterButton) {{
+          const label = selectedYearsLabel();
+          yearFilterButton.textContent = label === "All" ? "All years" : label;
+          yearFilterButton.title = label === "All" ? "All years" : `Selected years: ${{label}}`;
+        }}
+        for (const option of yearDropdownOptions) {{
+          const isSelected = selectedMapYears.has(String(option.dataset.year));
+          option.classList.toggle("is-selected", isSelected);
+          option.setAttribute("aria-selected", String(isSelected));
+        }}
+      }}
+
+      function setMapYear(year, selected = true) {{
+        currentMapYear = year;
+        if (selected) {{
+          selectedMapYears.add(String(year));
+        }} else {{
+          selectedMapYears.delete(String(year));
+        }}
+        syncYearDropdown();
+        refreshMapTrace();
+        if (selectedPlanid) {{
+          renderDetail(selectedPlanid, currentMapYear);
+        }}
+      }}
+
       function isPlanVisible(planid) {{
-        return mapRowsForYear(currentMapYear).some(
+        return mapRowsForSelection().some(
           (row) => String(row.planid) === String(planid)
         );
       }}
@@ -1132,27 +1336,31 @@ def _build_dashboard_html(
         if (!point || !point.customdata) {{
           return;
         }}
-        currentMapYear = point.customdata[2];
-        renderDetail(point.customdata[0], point.customdata[2]);
+        renderDetail(point.customdata[0], currentMapYear);
       }});
 
-      mapDiv.on("plotly_sliderchange", (event) => {{
-        currentMapYear = event.step?.label ?? currentMapYear;
+      populateSchoolDistrictSelect();
+      schoolDistrictSelect?.addEventListener("change", () => {{
+        selectedSchoolDistrict = schoolDistrictSelect.value;
         refreshMapTrace();
-        if (selectedPlanid) {{
-          renderDetail(selectedPlanid, currentMapYear);
-        }}
+        zoomToSchoolDistrict(selectedSchoolDistrict);
       }});
-
-      mapDiv.on("plotly_animatingframe", (event) => {{
-        currentMapYear = event.name ?? event.frame?.name ?? currentMapYear;
-        refreshMapTrace();
-        if (selectedPlanid) {{
-          renderDetail(selectedPlanid, currentMapYear);
-        }}
-      }});
-
       hotspotsOnlyToggle?.addEventListener("change", refreshMapTrace);
+      yearFilterButton?.addEventListener("click", () => {{
+        setYearDropdownOpen(yearDropdown?.hidden !== false);
+      }});
+      document.addEventListener("click", (event) => {{
+        if (!event.target.closest(".year-filter")) {{
+          setYearDropdownOpen(false);
+        }}
+      }});
+      for (const option of yearDropdownOptions) {{
+        option.addEventListener("click", () => {{
+          setMapYear(option.dataset.year, !selectedMapYears.has(String(option.dataset.year)));
+        }});
+      }}
+      syncYearDropdown();
+      refreshMapTrace();
 
       for (const row of document.querySelectorAll("[data-planid]")) {{
         row.addEventListener("click", () => renderDetail(row.dataset.planid, currentMapYear));
@@ -1199,6 +1407,7 @@ def _build_map_rows_payload(yearly_wgs84: gpd.GeoDataFrame) -> dict[str, list[di
             {
                 "planid": str(row["planid"]),
                 "subdivision_label": str(row["subdivision_label"]),
+                "school_district": _school_district(row),
                 "transfer_year": int(row["transfer_year"]),
                 "housing_stock": int(row["housing_stock"]),
                 "parcels_sold": int(row["parcels_sold"]),
@@ -1213,6 +1422,64 @@ def _build_map_rows_payload(yearly_wgs84: gpd.GeoDataFrame) -> dict[str, list[di
             for _, row in group.iterrows()
         ]
     return rows_by_year
+
+
+def _build_school_district_payload(yearly_wgs84: gpd.GeoDataFrame) -> dict[str, dict[str, object]]:
+    """Create school-district map centers and zoom levels for the district dropdown."""
+    if "school_district" not in yearly_wgs84.columns:
+        return {}
+
+    district_rows = yearly_wgs84.dropna(subset=["school_district"]).copy()
+    if district_rows.empty:
+        return {}
+
+    district_rows["school_district"] = district_rows["school_district"].astype(str).str.strip()
+    district_rows = district_rows[district_rows["school_district"] != ""]
+    if district_rows.empty:
+        return {}
+
+    payload: dict[str, dict[str, object]] = {}
+    for district, group in district_rows.groupby("school_district"):
+        district_geometries = group.drop_duplicates("planid")
+        min_lon, min_lat, max_lon, max_lat = district_geometries.total_bounds
+        center = district_geometries.geometry.union_all().centroid
+        payload[str(district)] = {
+            "label": str(district),
+            "center": {
+                "lat": _json_coordinate(center.y),
+                "lon": _json_coordinate(center.x),
+            },
+            "zoom": _estimate_map_zoom(min_lon, min_lat, max_lon, max_lat),
+        }
+    return payload
+
+
+def _build_default_map_view(fig: go.Figure) -> dict[str, object]:
+    """Return the map view used when clearing school-district filtering."""
+    try:
+        center = fig.layout.map.center
+        zoom = fig.layout.map.zoom
+        lat = center.lat
+        lon = center.lon
+    except AttributeError:
+        lat = 0
+        lon = 0
+        zoom = 10.5
+
+    return {
+        "center": {
+            "lat": _json_coordinate(lat),
+            "lon": _json_coordinate(lon),
+        },
+        "zoom": _json_number(zoom if zoom is not None else 10.5),
+    }
+
+
+def _estimate_map_zoom(min_lon: float, min_lat: float, max_lon: float, max_lat: float) -> float:
+    """Estimate a Plotly map zoom that frames a WGS84 bounding box."""
+    span = max(abs(max_lon - min_lon), abs(max_lat - min_lat), 0.001)
+    zoom = np.log2(360 / span) - 2.2
+    return round(float(np.clip(zoom, 9, 13.5)), 2)
 
 
 def _build_initial_detail_html(
@@ -1338,11 +1605,25 @@ def _subdivision_name(row) -> str | None:
     return name or None
 
 
+def _school_district(row) -> str:
+    value = row.get("school_district") if hasattr(row, "get") else None
+    if value is None or pd.isna(value):
+        return ""
+    return str(value).strip()
+
+
 def _json_number(value) -> float:
     """Return finite floats for JSON serialization."""
     if value is None or pd.isna(value):
         return 0.0
     return round(float(value), 2)
+
+
+def _json_coordinate(value) -> float:
+    """Return finite coordinate floats without over-rounding map centers."""
+    if value is None or pd.isna(value):
+        return 0.0
+    return round(float(value), 6)
 
 def main():
     """Build the hotspot persistence dataset end to end and export the map."""
@@ -1379,7 +1660,7 @@ def main():
     subdivision_grid_gdf = build_subdivision_grid(
         gdf=parcel_sales_gdf, 
         subdivision_id_col = "planid",
-        gpd_cols=["planid","subdivision_name","subdivision_geom"],
+        gpd_cols=["planid","subdivision_name","school_district","subdivision_geom"],
         geom_col="subdivision_geom"
         )
 
