@@ -38,5 +38,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cagis-parcel-polygons-geojson
-          path: geojson/cagis_parcel_polygons_layer.geojson
+          path: geojson/cagis_parcels_layer_incremental_page.geojson
           retention-days: 7

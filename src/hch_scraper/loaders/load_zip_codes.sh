@@ -7,7 +7,7 @@ if [ -f .env ]; then
   set +a
 fi
 
-QUERY_URL="https://services.arcgis.com/JyZag7oO4NteHGiq/arcgis/rest/services/OpenData/FeatureServer/26/query"
+QUERY_URL="https://services.arcgis.com/JyZag7oO4NteHGiq/arcgis/rest/services/Open_Data/FeatureServer/28/query?outFields=*&where=1%3D1&f=geojson"
 OUT="data/raw/cagis_zip_codes_layer.geojson"
 
 mkdir -p "$(dirname "$OUT")"

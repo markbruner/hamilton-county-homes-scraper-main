@@ -22,7 +22,7 @@ for var_name in "${required_vars[@]}"; do
   fi
 done
 
-QUERY_URL="https://services.arcgis.com/JyZag7oO4NteHGiq/arcgis/rest/services/OpenData/FeatureServer/10/query"
+QUERY_URL="https://services.arcgis.com/JyZag7oO4NteHGiq/arcgis/rest/services/Open_Data/FeatureServer/51/query"
 OUT_DIR="geojson"
 PAGE_FILE="${OUT_DIR}/cagis_parcels_layer_page.geojson"
 PAGE_SIZE=2000

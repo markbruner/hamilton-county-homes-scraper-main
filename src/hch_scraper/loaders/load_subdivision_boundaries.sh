@@ -22,7 +22,7 @@ for var_name in "${required_vars[@]}"; do
   fi
 done
 
-QUERY_URL="https://services.arcgis.com/JyZag7oO4NteHGiq/arcgis/rest/services/OpenData/FeatureServer/28/query"
+QUERY_URL="https://services.arcgis.com/JyZag7oO4NteHGiq/arcgis/rest/services/Open_Data/FeatureServer/27/query?outFields=*&where=1%3D1&f=geojson"
 OUT_DIR="geojson"
 PAGE_FILE="${OUT_DIR}/cagis_subdivision_boundaries_layer.geojson"
 PAGE_SIZE=2000

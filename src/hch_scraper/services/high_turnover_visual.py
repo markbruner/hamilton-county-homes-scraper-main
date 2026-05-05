@@ -9,6 +9,7 @@ import plotly.graph_objects as go
 import numpy as np
 import pandas as pd
 import geopandas as gpd
+from dotenv import load_dotenv
 
 
 pd.set_option('display.max_columns', None)
@@ -16,9 +17,9 @@ pd.set_option('display.max_columns', None)
 int64_list = ["finsqft", "year_built","total_rooms","bedrooms","full_baths", "half_baths"]
 core_cols = ['parcel_number', 'transfer_year', 'centroid']
 TURNOVER_COLORSCALE = [
-    [0.0, "#5b1f48"],
-    [0.5, "#bf3f78"],
-    [1.0, "#f06a4d"],
+    [0.0, "#5B4B8A"],
+    [0.5, "#9C4F96"],
+    [1.0, "#D95F59"],
 ]
 BLUE_RED_COLORSCALE = TURNOVER_COLORSCALE
 
@@ -27,7 +28,7 @@ class HotspotConfig:
     start_year: int
     end_year: int
     use: str = '510'
-    min_housing_stock: int = 30
+    min_housing_stock: int = 20
     hotspot_quantile: float = 0.90
     output_path: Path = Path("persistent_hotspots_map.html")
     database_url: str | None = None
@@ -43,10 +44,11 @@ def load_config(
     start_year: int,
     end_year: int,
     use: str = '510',
-    min_housing_stock: int = 30,
+    min_housing_stock: int = 20,
     hotspot_quantile: float = 0.90,
     output_path: str = "persistent_hotspots_map.html",
 ) -> HotspotConfig:
+    load_dotenv()
     database_url = os.getenv("SUPABASE_DATABASE_URL")
     if not database_url:
         raise RuntimeError("SUPABASE_DATABASE_URL is required")
@@ -526,7 +528,7 @@ def _build_yearly_turnover_figure(
         fig = go.Figure()
         fig.update_layout(
             map={
-                "style": "open-street-map",
+                "style": "carto-positron",
                 "center": {"lat": center.y, "lon": center.x},
                 "zoom": 10.5,
             },
@@ -538,7 +540,7 @@ def _build_yearly_turnover_figure(
                     "x": 0.5,
                     "y": 0.5,
                     "showarrow": False,
-                    "font": {"size": 18},
+                    "font": {"size": 18, "family": "Inter, sans-serif", "color": "#1D2730"},
                 }
             ],
             margin=dict(r=0, l=0, b=0, t=20),
@@ -594,36 +596,29 @@ def _build_yearly_turnover_figure(
                 zmax=color_max,
                 marker_opacity=0.68,
                 marker_line_width=0.7,
-                marker_line_color="#fff7ed",
+                marker_line_color="#F7F5F0",
                 colorbar={
-                    "title": "Turnover %",
+                    "title": {
+                        "text": "Turnover %",
+                        "font": {"color": "#1D2730", "family": "Inter, sans-serif"},
+                    },
                     "thickness": 14,
                     "len": 0.74,
+                    "tickfont": {"color": "#66727B", "family": "Inter, sans-serif"},
                 },
-                hovertemplate=(
-                    "<b>%{customdata[1]}</b><br>"
-                    "Plan ID: %{customdata[0]}<br>"
-                    "Year: %{customdata[2]}<br>"
-                    "Turnover: %{customdata[5]:.2f}%<br>"
-                    "Parcels sold: %{customdata[4]}<br>"
-                    "Housing stock: %{customdata[3]}<br>"
-                    "Hotspot threshold: %{customdata[6]:.2f}%<br>"
-                    "Hotspot this year: %{customdata[7]}<br>"
-                    "Persistent hotspot years: %{customdata[8]}"
-                    "<extra></extra>"
-                ),
+                hoverinfo="none",
             ),
             go.Choroplethmap(
                 geojson=geojson,
                 locations=[],
                 z=[],
                 featureidkey="properties.planid",
-                colorscale=[[0, "#17324d"], [1, "#17324d"]],
+                colorscale=[[0, "#355C7D"], [1, "#355C7D"]],
                 zmin=0,
                 zmax=1,
-                marker_opacity=0.16,
+                marker_opacity=0.18,
                 marker_line_width=4,
-                marker_line_color="#17324d",
+                marker_line_color="#355C7D",
                 showscale=False,
                 showlegend=False,
                 hoverinfo="skip",
@@ -634,7 +629,7 @@ def _build_yearly_turnover_figure(
 
     fig.update_layout(
         map={
-            "style": "open-street-map",
+            "style": "carto-positron",
             "center": {"lat": center.y, "lon": center.x},
             "zoom": 10.5,
         },
@@ -661,7 +656,6 @@ def _build_dashboard_html(
     map_rows_payload = _build_map_rows_payload(yearly_wgs84)
     school_district_payload = _build_school_district_payload(yearly_wgs84)
     default_map_view = _build_default_map_view(fig)
-    leaderboard_html = _build_leaderboard_html(hotspot_persistence_wgs84)
     initial_detail = _build_initial_detail_html(hotspot_persistence_wgs84)
 
     return f"""<!doctype html>
@@ -671,295 +665,245 @@ def _build_dashboard_html(
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Hamilton County Turnover Hotspots</title>
     <style>
+      @import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Inter:wght@400;500;600;700&display=swap");
       :root {{
-        --bg: #f4efe7;
-        --panel: #fffaf2;
-        --panel-strong: #f0e4d2;
-        --text: #1f2a30;
-        --muted: #68757f;
-        --accent: #a63d40;
-        --accent-dark: #7f1d1d;
-        --line: #d8cfc0;
-        --shadow: 0 18px 50px rgba(61, 44, 22, 0.10);
+        --bg: #F7F5F0;
+        --panel: #E8E4DA;
+        --panel-soft: #F1EEE7;
+        --panel-light: #FBFAF6;
+        --text: #1D2730;
+        --muted: #66727B;
+        --accent: #355C7D;
+        --accent-secondary: #6C8A6B;
+        --hotspot-low: #5B4B8A;
+        --hotspot-mid: #9C4F96;
+        --hotspot-high: #D95F59;
+        --line: rgba(29, 39, 48, 0.14);
+        --line-strong: rgba(29, 39, 48, 0.22);
+        --shadow: 0 18px 42px rgba(29, 39, 48, 0.08);
+        --serif: "Cormorant Garamond", Georgia, "Times New Roman", serif;
+        --sans: "Inter", "Segoe UI", Arial, sans-serif;
       }}
       * {{ box-sizing: border-box; }}
       body {{
         margin: 0;
-        font-family: Georgia, "Times New Roman", serif;
+        font-family: var(--sans);
         color: var(--text);
-        background:
-          radial-gradient(circle at top left, rgba(166, 61, 64, 0.12), transparent 30%),
-          linear-gradient(180deg, #f7f1e7 0%, #efe5d6 100%);
+        background: var(--bg);
       }}
       .page {{
-        max-width: 1480px;
+        max-width: 1500px;
         margin: 0 auto;
-        padding: 34px 24px 42px;
+        padding: 38px 26px 46px;
       }}
       .hero {{
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        gap: 24px;
-        align-items: end;
-        margin-bottom: 22px;
+        margin-bottom: 18px;
       }}
       .eyebrow {{
-        margin: 0 0 8px;
-        font-size: 12px;
-        letter-spacing: 0.18em;
+        margin: 0 0 10px;
+        font-family: var(--sans);
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.16em;
         text-transform: uppercase;
-        color: var(--accent-dark);
+        color: var(--accent);
       }}
       h1 {{
         margin: 0;
-        font-size: clamp(2.1rem, 4vw, 4.4rem);
-        line-height: 0.98;
+        font-family: var(--serif);
+        font-size: clamp(2.7rem, 5vw, 5.4rem);
+        font-weight: 700;
+        line-height: 0.92;
+        letter-spacing: 0;
       }}
-      .lede {{
-        max-width: 760px;
-        margin: 14px 0 0;
+      .intro-panel {{
+        margin: 0 0 24px;
+        padding: 0;
+      }}
+      .intro-panel p {{
+        max-width: 1040px;
+        margin: 0 0 8px;
+        font-family: var(--sans);
         color: var(--muted);
-        font-size: 1.05rem;
-        line-height: 1.55;
+        font-size: 1rem;
+        line-height: 1.65;
       }}
-      .method-card {{
-        max-width: 360px;
-        padding: 18px;
-        border-radius: 20px;
-        background: var(--panel);
-        border: 1px solid rgba(103, 88, 63, 0.18);
-        box-shadow: var(--shadow);
+      .intro-panel strong {{
+        color: var(--text);
+        font-weight: 700;
       }}
-      .method-card strong {{
-        display: block;
-        margin-bottom: 6px;
-      }}
-      .method-card p {{
-        margin: 0;
-        color: var(--muted);
-        line-height: 1.45;
+      .intro-panel p:last-child {{
+        margin-bottom: 0;
       }}
       .dashboard-grid {{
         display: grid;
-        grid-template-columns: minmax(340px, 0.38fr) minmax(520px, 1fr);
-        gap: 22px;
+        grid-template-columns: minmax(340px, 0.34fr) minmax(560px, 1fr);
+        gap: 24px;
         align-items: start;
       }}
       .side-panel,
       .map-panel {{
         background: var(--panel);
-        border: 1px solid rgba(103, 88, 63, 0.18);
-        border-radius: 24px;
+        border: 1px solid var(--line);
+        border-radius: 18px;
         box-shadow: var(--shadow);
       }}
       .side-panel {{
         display: grid;
-        gap: 18px;
-        padding: 20px;
+        gap: 22px;
+        padding: 22px;
       }}
       .map-panel {{
-        padding: 14px;
+        padding: 16px;
       }}
       .section-heading {{
-        margin-bottom: 12px;
+        margin-bottom: 14px;
       }}
       .section-heading h2 {{
-        margin: 0 0 6px;
-        font-size: 1.35rem;
+        margin: 0 0 7px;
+        font-family: var(--serif);
+        font-size: 1.55rem;
+        line-height: 1.05;
       }}
       .section-heading p {{
         margin: 0;
+        font-family: var(--sans);
         color: var(--muted);
-        line-height: 1.45;
+        font-size: 0.94rem;
+        line-height: 1.55;
       }}
       .detail-card {{
-        padding: 18px;
-        border-radius: 20px;
+        padding: 20px;
+        border-radius: 18px;
         color: white;
-        background: linear-gradient(140deg, rgba(23, 50, 77, 0.96), rgba(42, 111, 151, 0.92));
+        background: var(--accent);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10);
       }}
       .detail-card h3 {{
-        margin: 0 0 8px;
-        font-size: 1.35rem;
+        margin: 0 0 9px;
+        font-family: var(--serif);
+        font-size: 1.55rem;
+        line-height: 1.05;
       }}
       .detail-card p {{
-        margin: 0 0 14px;
-        color: rgba(255, 255, 255, 0.78);
+        margin: 0 0 16px;
+        font-family: var(--sans);
+        color: rgba(255, 255, 255, 0.82);
+        line-height: 1.5;
       }}
       .metric-grid {{
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 10px;
+        gap: 11px;
       }}
       .metric {{
         min-width: 0;
-        padding: 11px 12px;
-        border-radius: 14px;
-        background: rgba(255, 255, 255, 0.12);
-        border: 1px solid rgba(255, 255, 255, 0.16);
+        padding: 12px;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.11);
+        border: 1px solid rgba(255, 255, 255, 0.18);
       }}
       .metric span {{
         display: block;
-        margin-bottom: 5px;
+        margin-bottom: 6px;
+        font-family: var(--sans);
         font-size: 0.72rem;
+        font-weight: 700;
         text-transform: uppercase;
-        letter-spacing: 0.06em;
+        letter-spacing: 0.08em;
         color: rgba(255, 255, 255, 0.72);
       }}
       .metric strong {{
-        font-size: 1rem;
-      }}
-      .leaderboard {{
-        display: grid;
-        gap: 10px;
-      }}
-      .leaderboard-row {{
-        width: 100%;
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        gap: 16px;
-        align-items: center;
-        padding: 16px;
-        border: 1px solid var(--line);
-        border-radius: 16px;
-        background: linear-gradient(180deg, #fffdf9 0%, #fbf5ed 100%);
-        color: inherit;
-        font: inherit;
-        text-align: left;
-        cursor: pointer;
-      }}
-      .leaderboard-row:hover {{
-        border-color: rgba(166, 61, 64, 0.45);
-        background: #f8f0e5;
-      }}
-      .leaderboard-name {{
-        display: block;
-        min-width: 0;
-        font-weight: 700;
-        line-height: 1.25;
-      }}
-      .leaderboard-kpi {{
-        text-align: right;
-        white-space: nowrap;
-      }}
-      .leaderboard-kpi strong {{
-        display: block;
-        font-size: 1.55rem;
-        line-height: 1;
-        color: var(--accent-dark);
-      }}
-      .leaderboard-kpi span {{
-        display: block;
-        margin-top: 5px;
-        color: var(--muted);
-        font-size: 0.78rem;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
+        font-family: var(--sans);
+        font-size: 1.04rem;
+        line-height: 1.2;
       }}
       .map-controls {{
         display: flex;
         flex-wrap: wrap;
-        gap: 10px;
+        gap: 12px;
         align-items: center;
         justify-content: flex-end;
-        margin: 0 0 10px;
+        margin: 0 0 12px;
       }}
-      .year-filter {{
-        position: relative;
-        display: inline-block;
-      }}
-      .district-control,
-      .year-dropdown-button {{
-        min-height: 40px;
-        padding: 9px 32px 9px 12px;
+      .district-control {{
+        min-height: 42px;
+        padding: 9px 34px 9px 13px;
         border: 1px solid var(--line);
         border-radius: 8px;
-        background: #fffdf8;
+        background: var(--panel-light);
         color: var(--text);
-        font: inherit;
+        font-family: var(--sans);
         font-size: 0.94rem;
+        font-weight: 500;
         cursor: pointer;
       }}
-      .year-dropdown-button {{
-        min-width: 148px;
-        text-align: left;
+      .district-control:hover,
+      .district-control:focus {{
+        border-color: rgba(53, 92, 125, 0.42);
+        outline: none;
       }}
-      .year-dropdown-button::after {{
-        content: "v";
-        position: absolute;
-        right: 12px;
-        color: var(--muted);
+      .detail-year-controls {{
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 18px;
       }}
-      .year-dropdown {{
-        position: absolute;
-        z-index: 5;
-        top: calc(100% + 6px);
-        right: 0;
-        min-width: 170px;
-        display: grid;
-        gap: 4px;
-        padding: 8px;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: #fffdf8;
-        box-shadow: var(--shadow);
-      }}
-      .year-dropdown[hidden] {{
-        display: none;
-      }}
-      .year-option {{
+      .year-button {{
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        width: 100%;
-        min-height: 34px;
-        padding: 7px 8px;
-        border: 0;
+        justify-content: center;
+        min-height: 36px;
+        padding: 8px 13px;
+        border: 1px solid var(--line);
         border-radius: 8px;
-        background: transparent;
+        background: var(--panel-light);
         color: var(--text);
-        font: inherit;
+        font-family: var(--sans);
         font-size: 0.94rem;
-        text-align: left;
+        font-weight: 600;
         cursor: pointer;
       }}
-      .year-option:hover,
-      .year-option.is-selected {{
-        background: rgba(191, 63, 120, 0.12);
+      .year-button:hover,
+      .year-button.is-selected {{
+        border-color: rgba(53, 92, 125, 0.42);
+        background: rgba(53, 92, 125, 0.10);
       }}
-      .year-option.is-selected::after {{
-        content: "Selected";
-        color: var(--accent-dark);
-        font-size: 0.72rem;
-        text-transform: uppercase;
+      .year-button.is-selected {{
+        color: var(--accent);
+        font-weight: 700;
       }}
       .toggle-control {{
         display: inline-flex;
         gap: 8px;
         align-items: center;
-        padding: 10px 12px;
+        min-height: 42px;
+        padding: 9px 13px;
         border: 1px solid var(--line);
-        border-radius: 999px;
-        background: #fffdf8;
+        border-radius: 8px;
+        background: var(--panel-light);
         color: var(--text);
+        font-family: var(--sans);
         font-size: 0.94rem;
+        font-weight: 500;
         cursor: pointer;
       }}
+      .toggle-control:hover {{
+        border-color: rgba(53, 92, 125, 0.42);
+      }}
       .toggle-control input {{
-        accent-color: var(--accent-dark);
+        accent-color: var(--accent);
       }}
       #turnover-map {{
         width: 100%;
         min-height: 760px;
+        overflow: hidden;
+        border-radius: 14px;
       }}
       @media (max-width: 1100px) {{
-        .hero,
         .dashboard-grid {{
           grid-template-columns: 1fr;
-        }}
-        .method-card {{
-          max-width: none;
         }}
         #turnover-map {{
           min-height: 560px;
@@ -972,13 +916,6 @@ def _build_dashboard_html(
         .metric-grid {{
           grid-template-columns: 1fr;
         }}
-        .leaderboard-row {{
-          grid-template-columns: 1fr;
-          gap: 10px;
-        }}
-        .leaderboard-kpi {{
-          text-align: left;
-        }}
       }}
     </style>
   </head>
@@ -987,40 +924,33 @@ def _build_dashboard_html(
       <section class="hero">
         <div>
           <p class="eyebrow">Turnover Hotspot Explorer</p>
-          <h1>See where subdivision turnover persists over time.</h1>
-          <p class="lede">
-            Choose one or more years to compare annual turnover rates. Click a subdivision
-            on the map or a leaderboard row to inspect the yearly details and persistent
-            hotspot summary.
-          </p>
+          <h1>Explore persistent single-family home turnover</h1>
         </div>
-        <aside class="method-card">
-          <strong>How hotspots are defined</strong>
-          <p>
-            A subdivision is a hotspot in a year when its turnover rate is above the
-            configured quantile threshold and it meets the minimum housing stock filter.
-          </p>
-        </aside>
+      </section>
+
+      <section class="intro-panel" aria-label="Turnover and hotspot definitions">
+        <p>
+          <strong>Turnover</strong> means how many homes were sold out of all the homes in a neighborhood that year.
+          A <strong>hotspot</strong> is a neighborhood where more homes were sold than in most other neighborhoods, and it has at least 20 single-family homes.
+        </p>
+        <p>
+          Use the map to compare neighborhoods, then select one to see its yearly single-family home sales details.
+        </p>
       </section>
 
       <section class="dashboard-grid">
         <aside class="side-panel">
           <div>
             <div class="section-heading">
+              <h2>Years</h2>
+            </div>
+            <div id="detail-year-buttons" class="detail-year-controls" aria-label="Detail years"></div>
+            <div class="section-heading">
               <h2>Selected Subdivision</h2>
-              <p>Click the map or leaderboard to update this panel.</p>
+              <p>Click the map to update this panel.</p>
             </div>
             <div id="subdivision-detail" class="detail-card">
               {initial_detail}
-            </div>
-          </div>
-          <div>
-            <div class="section-heading">
-              <h2>Top 5 Persistent Hotspots</h2>
-              <p>Ranked by number of years in the hotspot set.</p>
-            </div>
-            <div class="leaderboard">
-              {leaderboard_html}
             </div>
           </div>
         </aside>
@@ -1028,14 +958,8 @@ def _build_dashboard_html(
         <section class="map-panel">
           <div class="map-controls" aria-label="Map filters">
             <select id="school-district-select" class="district-control" aria-label="School district">
-              <option value="">All school districts</option>
+              <option value="">All School Districts</option>
             </select>
-            <div class="year-filter">
-              <button id="year-filter-button" class="year-dropdown-button" type="button" aria-haspopup="listbox" aria-expanded="false">
-                All years
-              </button>
-              <div id="year-dropdown" class="year-dropdown" role="listbox" aria-label="Map years" aria-multiselectable="true" hidden></div>
-            </div>
             <label class="toggle-control" for="hotspots-only-toggle">
               <input id="hotspots-only-toggle" type="checkbox">
               Show hotspots only
@@ -1055,17 +979,15 @@ def _build_dashboard_html(
       const mapDiv = document.getElementById("turnover-map");
       const hotspotsOnlyToggle = document.getElementById("hotspots-only-toggle");
       const schoolDistrictSelect = document.getElementById("school-district-select");
-      const yearFilterButton = document.getElementById("year-filter-button");
-      const yearDropdown = document.getElementById("year-dropdown");
+      const detailYearButtons = document.getElementById("detail-year-buttons");
       const availableMapYears = Object.keys(mapRowsByYear)
         .sort((left, right) => Number(left) - Number(right));
       const HIGHLIGHT_TRACE_INDEX = 1;
       const MAIN_TRACE_INDEX = 0;
       let selectedPlanid = null;
       let currentMapYear = getInitialMapYear();
-      let selectedMapYears = new Set();
       let selectedSchoolDistrict = "";
-      const yearDropdownOptions = buildYearDropdown();
+      const yearButtons = buildYearButtons();
 
       function metric(label, value) {{
         return `<div class="metric"><span>${{escapeHtml(label)}}</span><strong>${{escapeHtml(value ?? "-")}}</strong></div>`;
@@ -1127,32 +1049,23 @@ def _build_dashboard_html(
         }});
       }}
 
-      function buildYearDropdown() {{
-        if (!yearDropdown) {{
+      function buildYearButtons() {{
+        if (!detailYearButtons) {{
           return [];
         }}
         return availableMapYears.map((year) => {{
           const option = document.createElement("button");
-          option.className = "year-option";
+          option.className = "year-button";
           option.type = "button";
           option.dataset.year = year;
-          option.setAttribute("role", "option");
           option.textContent = year;
-          yearDropdown.append(option);
+          detailYearButtons.append(option);
           return option;
         }});
       }}
 
-      function setYearDropdownOpen(isOpen) {{
-        if (!yearDropdown || !yearFilterButton) {{
-          return;
-        }}
-        yearDropdown.hidden = !isOpen;
-        yearFilterButton.setAttribute("aria-expanded", String(isOpen));
-      }}
-
       function mapRowsForSelection() {{
-        let rows = aggregateSelectedYearRows();
+        let rows = aggregateAllYearRows();
         if (selectedSchoolDistrict) {{
           rows = rows.filter((row) => row.school_district === selectedSchoolDistrict);
         }}
@@ -1162,16 +1075,15 @@ def _build_dashboard_html(
         return rows;
       }}
 
-      function aggregateSelectedYearRows() {{
+      function aggregateAllYearRows() {{
         const groups = new Map();
-        const selectedYears = selectedYearValues();
-        for (const year of selectedYears) {{
+        for (const year of availableMapYears) {{
           for (const row of mapRowsByYear[String(year)] ?? []) {{
             const planid = String(row.planid);
             if (!groups.has(planid)) {{
               groups.set(planid, {{
                 ...row,
-                transfer_year: selectedYearsLabel(),
+                transfer_year: "All",
                 parcels_sold: 0,
                 turnover_pct: 0,
                 hotspot_threshold_pct: 0,
@@ -1196,19 +1108,6 @@ def _build_dashboard_html(
         }}));
       }}
 
-      function selectedYearValues() {{
-        const values = Array.from(selectedMapYears);
-        return values.length ? values : availableMapYears;
-      }}
-
-      function selectedYearsLabel() {{
-        const years = selectedYearValues();
-        if (years.length === availableMapYears.length) {{
-          return "All";
-        }}
-        return years.join(", ");
-      }}
-
       function roundMetric(value) {{
         return Math.round((Number(value) || 0) * 100) / 100;
       }}
@@ -1217,7 +1116,7 @@ def _build_dashboard_html(
         return rows.map((row) => [
           row.planid,
           row.subdivision_label,
-          selectedYearsLabel(),
+          row.transfer_year,
           row.housing_stock,
           row.parcels_sold,
           row.turnover_pct,
@@ -1260,28 +1159,17 @@ def _build_dashboard_html(
         return min === max ? {{min, max: min + 1}} : {{min, max}};
       }}
 
-      function syncYearDropdown() {{
-        if (yearFilterButton) {{
-          const label = selectedYearsLabel();
-          yearFilterButton.textContent = label === "All" ? "All years" : label;
-          yearFilterButton.title = label === "All" ? "All years" : `Selected years: ${{label}}`;
-        }}
-        for (const option of yearDropdownOptions) {{
-          const isSelected = selectedMapYears.has(String(option.dataset.year));
+      function syncYearButtons() {{
+        for (const option of yearButtons) {{
+          const isSelected = String(option.dataset.year) === String(currentMapYear);
           option.classList.toggle("is-selected", isSelected);
-          option.setAttribute("aria-selected", String(isSelected));
+          option.setAttribute("aria-pressed", String(isSelected));
         }}
       }}
 
-      function setMapYear(year, selected = true) {{
+      function setMapYear(year) {{
         currentMapYear = year;
-        if (selected) {{
-          selectedMapYears.add(String(year));
-        }} else {{
-          selectedMapYears.delete(String(year));
-        }}
-        syncYearDropdown();
-        refreshMapTrace();
+        syncYearButtons();
         if (selectedPlanid) {{
           renderDetail(selectedPlanid, currentMapYear);
         }}
@@ -1346,25 +1234,13 @@ def _build_dashboard_html(
         zoomToSchoolDistrict(selectedSchoolDistrict);
       }});
       hotspotsOnlyToggle?.addEventListener("change", refreshMapTrace);
-      yearFilterButton?.addEventListener("click", () => {{
-        setYearDropdownOpen(yearDropdown?.hidden !== false);
-      }});
-      document.addEventListener("click", (event) => {{
-        if (!event.target.closest(".year-filter")) {{
-          setYearDropdownOpen(false);
-        }}
-      }});
-      for (const option of yearDropdownOptions) {{
+      for (const option of yearButtons) {{
         option.addEventListener("click", () => {{
-          setMapYear(option.dataset.year, !selectedMapYears.has(String(option.dataset.year)));
+          setMapYear(option.dataset.year);
         }});
       }}
-      syncYearDropdown();
+      syncYearButtons();
       refreshMapTrace();
-
-      for (const row of document.querySelectorAll("[data-planid]")) {{
-        row.addEventListener("click", () => renderDetail(row.dataset.planid, currentMapYear));
-      }}
     </script>
   </body>
 </html>
@@ -1444,7 +1320,7 @@ def _build_school_district_payload(yearly_wgs84: gpd.GeoDataFrame) -> dict[str, 
         min_lon, min_lat, max_lon, max_lat = district_geometries.total_bounds
         center = district_geometries.geometry.union_all().centroid
         payload[str(district)] = {
-            "label": str(district),
+            "label": _title_case(str(district)),
             "center": {
                 "lat": _json_coordinate(center.y),
                 "lon": _json_coordinate(center.x),
@@ -1478,8 +1354,8 @@ def _build_default_map_view(fig: go.Figure) -> dict[str, object]:
 def _estimate_map_zoom(min_lon: float, min_lat: float, max_lon: float, max_lat: float) -> float:
     """Estimate a Plotly map zoom that frames a WGS84 bounding box."""
     span = max(abs(max_lon - min_lon), abs(max_lat - min_lat), 0.001)
-    zoom = np.log2(360 / span) - 2.2
-    return round(float(np.clip(zoom, 9, 13.5)), 2)
+    zoom = np.log2(360 / span) - 1.0
+    return round(float(np.clip(zoom, 10.25, 14.5)), 2)
 
 
 def _build_initial_detail_html(
@@ -1612,6 +1488,10 @@ def _school_district(row) -> str:
     return str(value).strip()
 
 
+def _title_case(value: str) -> str:
+    return value.title()
+
+
 def _json_number(value) -> float:
     """Return finite floats for JSON serialization."""
     if value is None or pd.isna(value):
@@ -1631,7 +1511,7 @@ def main():
         start_year=2020, 
         end_year=2025, 
         use='510',
-        min_housing_stock=30,
+        min_housing_stock=20,
         hotspot_quantile=0.90,
         output_path="persistent_hotspots_map.html"
         )

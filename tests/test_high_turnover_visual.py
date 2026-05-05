@@ -13,6 +13,7 @@ from hch_scraper.services.high_turnover_visual import (
     _build_school_district_payload,
     _build_yearly_turnover_figure,
     _calculate_turnover,
+    _estimate_map_zoom,
     _format_year_ranges,
     _prepare_yearly_map_data,
     create_hotspot_persistence_wgs84,
@@ -200,6 +201,8 @@ def test_yearly_turnover_figure_uses_contrast_turnover_colorscale():
     assert fig.data[0].colorscale == tuple((value, color) for value, color in TURNOVER_COLORSCALE)
     assert fig.data[0].type == "choroplethmap"
     assert "Alpha Acres" in fig.data[0].customdata[:, 1]
+    assert fig.data[0].hoverinfo == "none"
+    assert fig.data[0].hovertemplate is None
 
 
 def test_yearly_turnover_figure_adds_selected_subdivision_highlight_trace():
@@ -254,7 +257,7 @@ def test_yearly_turnover_figure_omits_plotly_slider_and_animation_buttons():
     fig = _build_yearly_turnover_figure(prepared, center)
 
     assert fig.layout.title.text is None
-    assert fig.layout.map.style == "open-street-map"
+    assert fig.layout.map.style == "carto-positron"
     assert len(fig.layout.updatemenus) == 0
     assert len(fig.layout.sliders) == 0
     assert len(fig.frames) == 0
@@ -353,25 +356,51 @@ def test_dashboard_updates_selected_subdivision_on_map_year_changes():
     html = _build_dashboard_html(fig, prepared, persistence)
 
     assert "Map Year" in html
-    assert "year-filter-button" in html
-    assert "year-dropdown" in html
-    assert "year-option" in html
+    assert "Years" in html
+    assert "detail-year-buttons" in html
+    assert "year-button" in html
     assert "dataset.year = year" in html
-    assert "All years" in html
-    assert "selectedMapYears = new Set()" in html
-    assert "aggregateSelectedYearRows" in html
-    assert "selectedYearsLabel" in html
+    assert "Changes the detail panel without filtering the map." not in html
+    assert "aggregateAllYearRows" in html
     assert "setMapYear" in html
-    assert "syncYearDropdown" in html
-    assert "setYearDropdownOpen" in html
-    assert "return values.length ? values : availableMapYears;" in html
-    assert "year-toggle-controls" not in html
+    assert "syncYearButtons" in html
+    assert "year-filter-button" not in html
+    assert "year-dropdown" not in html
+    assert "selectedMapYears" not in html
+    assert "aggregateSelectedYearRows" not in html
+    assert "selectedYearsLabel" not in html
     assert 'mapDiv.on("plotly_sliderchange"' not in html
     assert 'mapDiv.on("plotly_animatingframe"' not in html
     assert "currentMapYear" in html
     assert "HIGHLIGHT_TRACE_INDEX" in html
     assert "highlightSubdivision" in html
     assert "Plotly.restyle" in html
+    assert "Top 5 Persistent Hotspots" not in html
+    assert "leaderboard" not in html
+
+
+def test_dashboard_hero_uses_simple_turnover_explainer():
+    sales_stock_by_year = create_sales_stock_by_year(
+        _parcel_sales_points(),
+        _subdivision_grid(),
+        hotspot_quantile=0.5,
+        min_housing_stock=30,
+    )
+    persistence, center = create_hotspot_persistence_wgs84(sales_stock_by_year)
+    prepared = _prepare_yearly_map_data(sales_stock_by_year, persistence)
+    fig = _build_yearly_turnover_figure(prepared, center)
+
+    html = _build_dashboard_html(fig, prepared, persistence)
+
+    assert "Explore persistent single-family home turnover" in html
+    assert "See where subdivision turnover persists over time." not in html
+    assert "Use the year buttons to review the selected subdivision details" not in html
+    assert "How hotspots are defined" not in html
+    assert "method-card" not in html
+    assert "intro-panel" in html
+    assert "<strong>Turnover</strong> means how many homes were sold out of all the homes in a neighborhood that year." in html
+    assert "A <strong>hotspot</strong> is a neighborhood where more homes were sold than in most other neighborhoods, and it has at least 20 single-family homes." in html
+    assert "Use the map to compare neighborhoods, then select one to see its yearly single-family home sales details." in html
 
 
 def test_map_rows_payload_supports_hotspot_only_filtering():
@@ -402,14 +431,23 @@ def test_school_district_payload_builds_zoom_targets_from_subdivision_bounds():
     )
     persistence, _center = create_hotspot_persistence_wgs84(sales_stock_by_year)
     prepared = _prepare_yearly_map_data(sales_stock_by_year, persistence)
+    prepared.loc[prepared["school_district"] == "North District", "school_district"] = "NORTH DISTRICT"
+    prepared.loc[prepared["school_district"] == "South District", "school_district"] = "south district"
 
     payload = _build_school_district_payload(prepared)
 
-    assert set(payload) == {"North District", "South District"}
-    assert payload["North District"]["label"] == "North District"
-    assert payload["North District"]["center"]["lat"] == 39.105
-    assert payload["North District"]["center"]["lon"] == -84.595
-    assert 9 <= payload["South District"]["zoom"] <= 13.5
+    assert set(payload) == {"NORTH DISTRICT", "south district"}
+    assert payload["NORTH DISTRICT"]["label"] == "North District"
+    assert payload["NORTH DISTRICT"]["center"]["lat"] == 39.105
+    assert payload["NORTH DISTRICT"]["center"]["lon"] == -84.595
+    assert payload["south district"]["label"] == "South District"
+    assert 10.25 <= payload["south district"]["zoom"] <= 14.5
+    assert payload["south district"]["zoom"] > 13.5
+
+
+def test_estimate_map_zoom_fits_school_district_bounds_more_tightly():
+    assert _estimate_map_zoom(-84.60, 39.10, -84.59, 39.11) > 14
+    assert _estimate_map_zoom(-84.60, 39.10, -84.50, 39.20) > 10.5
 
 
 def test_dashboard_includes_hotspot_only_toggle():
@@ -435,6 +473,35 @@ def test_dashboard_includes_hotspot_only_toggle():
     assert "zmax: [range.max]" in html
 
 
+def test_dashboard_uses_civic_planning_theme_tokens():
+    sales_stock_by_year = create_sales_stock_by_year(
+        _parcel_sales_points(),
+        _subdivision_grid(),
+        hotspot_quantile=0.5,
+        min_housing_stock=30,
+    )
+    persistence, center = create_hotspot_persistence_wgs84(sales_stock_by_year)
+    prepared = _prepare_yearly_map_data(sales_stock_by_year, persistence)
+    fig = _build_yearly_turnover_figure(prepared, center)
+
+    html = _build_dashboard_html(fig, prepared, persistence)
+
+    assert "Cormorant Garamond" in html
+    assert '"Inter"' in html
+    assert "--bg: #F7F5F0;" in html
+    assert "--panel: #E8E4DA;" in html
+    assert "--text: #1D2730;" in html
+    assert "--muted: #66727B;" in html
+    assert "--accent: #355C7D;" in html
+    assert "--accent-secondary: #6C8A6B;" in html
+    assert "--hotspot-low: #5B4B8A;" in html
+    assert "--hotspot-mid: #9C4F96;" in html
+    assert "--hotspot-high: #D95F59;" in html
+    assert "background: var(--accent);" in html
+    assert "font-family: var(--serif);" in html
+    assert "font-family: var(--sans);" in html
+
+
 def test_dashboard_includes_school_district_dropdown_and_zoom_handler():
     sales_stock_by_year = create_sales_stock_by_year(
         _parcel_sales_points(),
@@ -449,7 +516,7 @@ def test_dashboard_includes_school_district_dropdown_and_zoom_handler():
     html = _build_dashboard_html(fig, prepared, persistence)
 
     assert "school-district-select" in html
-    assert "All school districts" in html
+    assert "All School Districts" in html
     assert "const schoolDistricts" in html
     assert "const defaultMapView" in html
     assert 'let selectedSchoolDistrict = "";' in html
@@ -464,7 +531,7 @@ def test_dashboard_includes_school_district_dropdown_and_zoom_handler():
     assert "South District" in html
 
 
-def test_dashboard_year_toggle_reapplies_hotspot_only_filter():
+def test_dashboard_year_buttons_only_update_detail_panel():
     sales_stock_by_year = create_sales_stock_by_year(
         _parcel_sales_points(),
         _subdivision_grid(),
@@ -487,13 +554,21 @@ def test_dashboard_year_toggle_reapplies_hotspot_only_filter():
 
     assert hotspot_planids_for_year(2024) == ["A"]
     assert hotspot_planids_for_year(2025) == ["B"]
-    assert "function setMapYear(year, selected = true)" in html
+    assert "function setMapYear(year)" in html
     assert "currentMapYear = year;" in html
-    assert "refreshMapTrace();" in html
     assert "function mapRowsForSelection()" in html
+    assert "function aggregateAllYearRows()" in html
     assert "if (hotspotsOnlyToggle?.checked)" in html
     assert "return rows.filter((row) => row.is_hotspot);" in html
-    assert "setMapYear(option.dataset.year, !selectedMapYears.has(String(option.dataset.year)))" in html
+    assert "setMapYear(option.dataset.year);" in html
+
+    set_year_start = html.index("function setMapYear(year)")
+    set_year_end = html.index("function isPlanVisible", set_year_start)
+    set_year_body = html[set_year_start:set_year_end]
+
+    assert "refreshMapTrace" not in set_year_body
+    assert "syncYearButtons();" in set_year_body
+    assert "renderDetail(selectedPlanid, currentMapYear);" in set_year_body
 
 
 def test_dashboard_disables_plotly_autoplay():
