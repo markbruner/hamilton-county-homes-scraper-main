@@ -25,7 +25,7 @@ Current files:
 Required:
 - Windows machine
 - OSGeo4W (or QGIS with OSGeo tools)
-- `ogr2ogr` and `ogrinfo` available in OSGeo environment
+- `python` and the PostgreSQL client `psql` available on PATH
 - `bash` and `curl` available in OSGeo environment
 - PostgreSQL/Supabase connection values in project `.env`
 
@@ -42,23 +42,24 @@ Project assumptions:
 
 Purpose:
 - Download current zip-code layer GeoJSON from ArcGIS
-- Replace target table in PostgreSQL (`bronze.cagis_zip_codes_layer_raw`)
+- Refresh the rows in `bronze.cagis_zip_codes_layer_raw` while preserving its dependent views
 
 Location:
 - `src/hch_scraper/loaders/load_zip_codes.sh`
 
 Current behavior:
-1. Loads env vars from `.env`
-2. Calls ArcGIS endpoint with `curl`
-3. Validates downloaded file contains `"features"`
-4. Drops destination table (if it exists) using `ogrinfo`
-5. Loads GeoJSON into PostgreSQL with `ogr2ogr`
+1. Downloads the public ZIP layer and compares its feature count with the source count.
+2. Checks ZIP code uniqueness and polygon presence, then saves validated GeoJSON.
+3. In a live run, stages the data in a temporary PostgreSQL table and validates the geometries.
+4. Updates existing ZIP codes in place and inserts new ZIP codes in one transaction.
+
+Run `bash src/hch_scraper/loaders/load_zip_codes.sh --dry-run` to validate the public source without connecting to PostgreSQL. Manual GitHub Actions runs default to this mode.
 
 Key implementation details:
 - `set -euo pipefail` fails fast on any command error
 - `curl -fsS` fails on HTTP errors
 - `mkdir -p` ensures output directory exists
-- Explicit `DROP TABLE IF EXISTS ...` avoids GDAL overwrite inconsistencies
+- The refresh stops if existing ZIP codes are duplicated or missing from the source. A failed transaction rolls back its row changes.
 
 ## 4. OSGeo Wrapper (`run_load_zip_codes.bat`)
 
@@ -132,11 +133,11 @@ Settings:
 ### Error: `OSGeo4W.bat not found`
 - Fix bootstrap path in `run_load_zip_codes.bat`
 - To locate tools, use the working OSGeo shell and run:
-  - `where ogr2ogr`
+  - `where python`
+  - `where psql`
 
-### Error: `Layer ... already exists, CreateLayer failed`
-- This is handled by pre-drop in `load_zip_codes.sh`:
-  - `DROP TABLE IF EXISTS bronze.cagis_zip_codes_layer_raw`
+### Error: `Destination contains unmatched or duplicate ZIP codes`
+- Compare destination ZIP codes with the validated GeoJSON before making any data corrections.
 
 ### Batch returns non-zero exit code
 1. Open `logs\load_zip_codes.log`
@@ -146,7 +147,7 @@ Settings:
 ### Connection/auth errors
 - Verify `.env` DB values
 - Confirm network/firewall access to DB host
-- Confirm database user has create/drop permissions on `bronze` schema
+- Confirm the database user can create temporary tables and select, update, and insert ZIP rows. Inserting new ZIP codes also requires access to the existing ID default and its sequence, if used.
 
 ## 8. Reusable Template for Another Loader
 

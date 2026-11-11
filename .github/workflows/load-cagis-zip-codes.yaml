@@ -2,41 +2,50 @@ name: Load CAGIS ZIP Codes to Supabase
 
 on:
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Validate the public ZIP layer without updating Supabase
+        type: boolean
+        default: true
   schedule:
     - cron: "30 10 30 1,4,7,10 *" # 6:30 AM ET-ish in Jan, Apr, Jul, and Oct
+
+permissions:
+  contents: read
 
 jobs:
   load-cagis-zip-codes:
     runs-on: ubuntu-latest
 
-    env:
-      SUPABASE_DB_HOST: ${{ secrets.SUPABASE_DB_HOST }}
-      SUPABASE_DB_PORT: ${{ secrets.SUPABASE_DB_PORT }}
-      SUPABASE_DB_NAME: ${{ secrets.SUPABASE_DB_NAME }}
-      SUPABASE_DB_USER: ${{ secrets.SUPABASE_DB_USER }}
-      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
-      - name: Install GDAL
+      - name: Install PostgreSQL client
+        if: github.event_name == 'schedule' || !inputs.dry_run
         run: |
           sudo apt-get update
-          sudo apt-get install -y gdal-bin
+          sudo apt-get install -y postgresql-client
 
-      - name: Verify tools
-        run: |
-          curl --version
-          ogrinfo --version
-          ogr2ogr --version
+      - name: Validate public ZIP layer
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run
+        run: bash ./src/hch_scraper/loaders/load_zip_codes.sh --dry-run
           
       - name: Run CAGIS ZIP code load script
+        if: github.event_name == 'schedule' || !inputs.dry_run
+        env:
+          SUPABASE_DB_HOST: ${{ secrets.SUPABASE_DB_HOST }}
+          SUPABASE_DB_PORT: ${{ secrets.SUPABASE_DB_PORT }}
+          SUPABASE_DB_NAME: ${{ secrets.SUPABASE_DB_NAME }}
+          SUPABASE_DB_USER: ${{ secrets.SUPABASE_DB_USER }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: bash ./src/hch_scraper/loaders/load_zip_codes.sh
       
       - name: Upload GeoJSON artifact
         uses: actions/upload-artifact@v4
         with:
           name: cagis-zip-codes-geojson
-          path: geojson/cagis_zip_codes_layer.geojson
+          path: data/raw/cagis_zip_codes_layer.geojson
           retention-days: 7
