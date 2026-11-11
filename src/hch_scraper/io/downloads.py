@@ -274,7 +274,7 @@ def scrape_detail_pages(driver, wait, num_properties: int = 10) -> list:
     return results
 
 
-def get_csv_data(wait, max_wait=30) -> pd.DataFrame:
+def get_csv_data(wait, max_wait=30, *, expected_rows: int | None) -> pd.DataFrame:
     """
     Clicks the “Download CSV” link, waits for a non-empty CSV to appear,
     loads it into a DataFrame, then deletes *all* search_results*.csv files.
@@ -284,12 +284,17 @@ def get_csv_data(wait, max_wait=30) -> pd.DataFrame:
     wait : selenium.webdriver.support.ui.WebDriverWait
     max_wait : int
         Seconds to wait for a fresh CSV before giving up.
+    expected_rows : int
+        Result count reported by the sales page.
 
     Returns
     -------
     pd.DataFrame
     """
-    download_dir = Path(data_storage["raw"]).resolve()  # adjust if different
+    if expected_rows is None:
+        raise ValueError("Could not verify the auditor's sales result count.")
+
+    download_dir = Path(data_storage["raw"]).resolve()
     pattern = download_dir / "search_results*.csv"
 
     # Clean slate
@@ -314,21 +319,21 @@ def get_csv_data(wait, max_wait=30) -> pd.DataFrame:
         time.sleep(0.5)
 
     if not csv_path:
-        logger.error("CSV download timed out; no file found.")
-        return pd.DataFrame()  # or raise, depending on your policy
+        raise TimeoutError("Sales CSV download timed out.")
 
-    # Read
     try:
         df = pd.read_csv(csv_path)
-    except Exception as e:
-        logger.error(f"Failed to read CSV {csv_path}: {e}")
-        return pd.DataFrame()
+    finally:
+        _purge_existing_csvs(pattern)
 
-    if df.empty:
-        logger.warning(f"Downloaded CSV is empty: {csv_path}")
-
-    # Clean up *all* matching CSVs
-    _purge_existing_csvs(pattern)
+    expected_columns = {
+        "Parcel Number", "Address", "BBB", "FinSqFt", "Use", "Year Built",
+        "Transfer Date", "Amount",
+    }
+    if set(df.columns) != expected_columns:
+        raise ValueError("The auditor's sales CSV has unexpected columns.")
+    if len(df) != expected_rows:
+        raise ValueError(f"Sales CSV has {len(df)} rows, expected {expected_rows}.")
 
     return df
 

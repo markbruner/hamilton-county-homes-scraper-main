@@ -2,29 +2,38 @@ name: Backfill Hamilton County Scrape
 
 on:
   schedule:
-    # Runs every day at 6:30 AM America/New_York
-    # GitHub cron is in UTC → 6:30 AM ET = 11:30 UTC (standard time)
+    # Sundays at 12:25 UTC.
     - cron: "25 12 * * 0"
-  workflow_dispatch:  # allow manual runs from the Actions tab
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Prepare sales records without writing to Supabase
+        type: boolean
+        default: true
+      start_date:
+        description: Optional first sale date (YYYY-MM-DD)
+        type: string
+      end_date:
+        description: Optional last sale date (YYYY-MM-DD)
+        type: string
+
+permissions:
+  contents: read
 
 jobs:
   scrape:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     # prevent overlapping runs
     concurrency:
       group: daily-hch-scrape
       cancel-in-progress: false
 
-    env:
-      # Supabase secrets
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-
-
     steps:
       - name: Check out repo
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -37,9 +46,35 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run backfill scraper
+      - name: Check browser and driver
         run: |
-          export PYTHONPATH="$PYTHONPATH:${GITHUB_WORKSPACE}/src"
-          python -m hch_scraper.pipelines.daily_scraper \
-            --min_days_ago 4 \
-            --max_days_ago 184
+          firefox --version
+          geckodriver --version
+
+      - name: Dry run backfill scraper
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+          START_DATE: ${{ inputs.start_date }}
+          END_DATE: ${{ inputs.end_date }}
+        run: |
+          range=(--min_days_ago 4 --max_days_ago 5)
+          if [[ -n "$START_DATE" || -n "$END_DATE" ]]; then
+            range=(--start-date="$START_DATE" --end-date="$END_DATE")
+          fi
+          python -m hch_scraper.pipelines.daily_scraper --dry-run "${range[@]}"
+
+      - name: Run backfill scraper and load sales
+        if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run)
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+          START_DATE: ${{ inputs.start_date }}
+          END_DATE: ${{ inputs.end_date }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          range=(--min_days_ago 4 --max_days_ago 184)
+          if [[ -n "$START_DATE" || -n "$END_DATE" ]]; then
+            range=(--start-date="$START_DATE" --end-date="$END_DATE")
+          fi
+          python -m hch_scraper.pipelines.daily_scraper "${range[@]}"

@@ -9,6 +9,13 @@ def test_initialize_ranges_basic():
     ]
 
 
+def test_initialize_ranges_includes_single_day_tail():
+    assert _initialize_ranges("01/01/2026", "01/04/2026", window_days=2) == [
+        ("01/01/2026", "01/03/2026"),
+        ("01/04/2026", "01/04/2026"),
+    ]
+
+
 def test_initialize_ranges_start_after_end():
     try:
         _initialize_ranges("01/10/2026", "01/05/2026", window_days=2)

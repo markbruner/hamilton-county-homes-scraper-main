@@ -16,7 +16,7 @@ To run:
     $ python -m src.hch_scraper.main
 """
 
-import time
+import json
 import os
 import pandas as pd
 from datetime import datetime, date, timedelta
@@ -24,7 +24,7 @@ from typing import List, Tuple
 from dataclasses import dataclass, asdict
 from dotenv import load_dotenv
 import numpy as np
-from supabase import create_client, Client
+from supabase import create_client
 import zoneinfo
 import argparse
 
@@ -38,7 +38,7 @@ from hch_scraper.utils.data_extraction.address_cleaners import (
     normalize_address_parts,
     tag_address,
 )
-from hch_scraper.io.ingestion import upsert_sales_raw
+from hch_scraper.io.ingestion import prepare_sales_records, upsert_sales_raw
 from hch_scraper.utils.data_extraction.form_helpers.selenium_utils import safe_quit
 
 from hch_scraper.utils.data_extraction.form_helpers.datetime_utils import (
@@ -101,21 +101,38 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--min_days_ago",
         type=int,
-        required=True,
         help="Most recent day to scrape (e.g. 1 = yesterday)",
     )
 
     parser.add_argument(
         "--max_days_ago",
         type=int,
-        required=True,
         help="Oldest day to scrape (e.g. 3 = three days ago)",
     )
 
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Prepare payloads without contacting Supabase"
+    )
+    parser.add_argument("--start-date", type=date.fromisoformat, help="First date (YYYY-MM-DD)")
+    parser.add_argument("--end-date", type=date.fromisoformat, help="Last date (YYYY-MM-DD)")
     return parser.parse_args(argv)
 
 
-def validate_args(args: argparse.Namespace) -> None:
+def resolve_dates(args: argparse.Namespace, today: date) -> Dates:
+    start = getattr(args, "start_date", None)
+    end = getattr(args, "end_date", None)
+    max_backfill_days = 730
+    if start is not None or end is not None:
+        if start is None or end is None:
+            raise ValueError("--start-date and --end-date are required together.")
+        if args.min_days_ago is not None or args.max_days_ago is not None:
+            raise ValueError("Use either fixed dates or days-ago arguments.")
+        if not today - timedelta(days=max_backfill_days) <= start <= end < today:
+            raise ValueError("Fixed dates must be ordered and within the previous 730 days.")
+        return Dates(start, end)
+
+    if args.min_days_ago is None or args.max_days_ago is None:
+        raise ValueError("--min_days_ago and --max_days_ago are required together.")
     if args.min_days_ago >= args.max_days_ago:
         raise ValueError(
             f"min_days_ago ({args.min_days_ago}) must be < max_days_ago ({args.max_days_ago})"
@@ -124,28 +141,24 @@ def validate_args(args: argparse.Namespace) -> None:
     if args.min_days_ago < 0 or args.max_days_ago < 0:
         raise ValueError("min_days_ago and max_days_ago must be >= 0")
 
-    MAX_BACKFILL_DAYS = 730  # 2 years
+    if args.max_days_ago > max_backfill_days:
+        raise ValueError(f"max_days_ago cannot exceed {max_backfill_days}")
 
-    if args.max_days_ago > MAX_BACKFILL_DAYS:
-        raise ValueError(f"max_days_ago cannot exceed {MAX_BACKFILL_DAYS}")
+    return Dates(
+        today - timedelta(days=args.max_days_ago),
+        today - timedelta(days=args.min_days_ago),
+    )
 
 
-def run_scraper_for_dates(dates: datetime, robots_txt_allowed: bool) -> ScraperResult:
-    """
-    Runs the scraper for a single year within the specified date range.
-
-    Args:
-        dates (Dates): Object containing start date, end date, and years to loop through.
-        robots_txt_allowed (bool): Whether scraping is permitted by robots.txt.
-
-    Returns:
-        ScraperResult: Structured result containing scraped data and metadata.
-    """
+def run_scraper_for_dates(
+    dates: Dates, robots_txt_allowed: bool, *, dry_run: bool = False
+) -> None:
+    """Process the requested inclusive date range."""
     formatted_start = _format_date(dates.start_date)
     formatted_end = _format_date(dates.end_date)
     ranges = _initialize_ranges(formatted_start, formatted_end)
 
-    _scrape_all_dates(ranges, robots_txt_allowed, formatted_start, formatted_end)
+    _scrape_all_dates(ranges, robots_txt_allowed, dry_run=dry_run)
 
 
 def _get_required_env(keys: List[str]) -> dict:
@@ -158,27 +171,21 @@ def _get_required_env(keys: List[str]) -> dict:
 
 
 def _scrape_all_dates(
-    ranges: List[Tuple[str, str]], robots_txt_allowed: bool, search_start, search_end
-) -> pd.DataFrame:
-    """
-    Loops through ranges and gathers all data into a single DataFrame.
+    ranges: List[Tuple[str, str]], robots_txt_allowed: bool, *, dry_run: bool = False
+) -> None:
+    """Scrape and prepare each date range, then optionally send it to Supabase."""
+    if not robots_txt_allowed:
+        raise PermissionError("Sales scraping requires a successful robots.txt check.")
 
-    Args:
-        ranges (List[Tuple[str, str]]): The list of start-end date tuples to scrape.
-        robots_txt_allowed (bool): Flag indicating if scraping is allowed.
-
-    Returns:
-        pd.DataFrame: Combined DataFrame of all scraped data.
-    """
-    env = _get_required_env(["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"])
-    SUPABASE_URL = env["SUPABASE_URL"]
-    SUPABASE_SERVICE_ROLE_KEY = env["SUPABASE_SERVICE_ROLE_KEY"]
-    supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+    supabase = None
+    if not dry_run:
+        env = _get_required_env(["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"])
+        supabase = create_client(env["SUPABASE_URL"], env["SUPABASE_SERVICE_ROLE_KEY"])
 
     while ranges[:]:
         for start, end in ranges[:]:
             logger.info(f"Scraping from {start} to {end}")
-            all_data, updated_ranges, driver, modified = main(
+            all_data, updated_ranges, _, modified = main(
                 robots_txt_allowed, ScrapeRequest(start, end, ranges)
             )
             ranges = updated_ranges
@@ -186,9 +193,9 @@ def _scrape_all_dates(
             if modified:
                 break
 
-            if len(all_data)==0:
-                logger.info("No new records; exiting cleanly.")
-                raise SystemExit(0)
+            if all_data.empty:
+                logger.info("No sales in this date range.")
+                continue
             
             all_data, _addr_issues = _enrich_addresses(all_data)
             
@@ -202,12 +209,17 @@ def _scrape_all_dates(
             all_data = all_data.replace({np.nan: None, np.inf: None, -np.inf: None})
             all_data.columns = all_data.columns.str.lower()
             all_data.columns = all_data.columns.str.replace(" ", "_")
-            upsert_sales_raw(
-                df=all_data,
-                supabase=supabase,
-                schema_name="bronze",
-                table_name="sales_hamilton",
-            )
+            if dry_run:
+                records = prepare_sales_records(all_data)
+                json.dumps(records, allow_nan=False)
+                logger.info(
+                    "Dry run prepared %d sales records for %s to %s.",
+                    len(records), start, end,
+                )
+                continue
+
+            count = upsert_sales_raw(df=all_data, supabase=supabase)
+            logger.info("Completed %d Supabase upsert calls for %s to %s.", count, start, end)
 
 
 def _enrich_addresses(df: pd.DataFrame) -> pd.DataFrame:
@@ -227,30 +239,18 @@ def _enrich_addresses(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def run_scraper_pipeline(args: argparse.Namespace | None = None):
-    """
-    Executes the full scraping pipeline.
-
-    Prompts the user for a date range, checks robots.txt permission,
-    and runs the scraper for each date in the specified range.
-    """
-    load_dotenv()
+    """Run the scheduled sales pipeline for the requested days-ago window."""
     tz = zoneinfo.ZoneInfo("America/New_York")
     args = args or parse_args()
-    validate_args(args)
+    dates = resolve_dates(args, datetime.now(tz).date())
+    dry_run = getattr(args, "dry_run", False)
+    if not dry_run:
+        load_dotenv()
 
-    start_date = (datetime.now(tz) - timedelta(days=args.max_days_ago)).date()
-    end_date = (datetime.now(tz) - timedelta(days=args.min_days_ago)).date()
-    dates = Dates(start_date, end_date)
-    logger.info(f"the date range is for start is {start_date} and end is {end_date}")
-    # driver, wait = init_driver(URLS["base"])
-
-    # try:
-    #     robots_txt_allowed = check_allowed_webscraping(driver)
-    # finally:
-    #     safe_quit(driver)
-    robots_txt_allowed = True
-
-    run_scraper_for_dates(dates, robots_txt_allowed)
+    logger.info("Sales date range: %s to %s.", dates.start_date, dates.end_date)
+    if not check_allowed_webscraping():
+        raise PermissionError("The auditor's robots.txt disallows sales scraping.")
+    run_scraper_for_dates(dates, robots_txt_allowed=True, dry_run=dry_run)
 
 
 def _format_date(dt: date) -> str:
@@ -284,7 +284,7 @@ def _initialize_ranges(
     ranges = []
 
     current_start = start_dt
-    while current_start < end_dt:
+    while current_start <= end_dt:
         current_end = min(current_start + step, end_dt)
         ranges.append((current_start.strftime(fmt), current_end.strftime(fmt)))
         current_start += step + timedelta(days=1)
@@ -310,15 +310,12 @@ def main(
             - bool: Whether reset was triggered (i.e., result count exceeded max).
     """
 
-    BASE_URL = URLS["base"]
-    driver, wait = init_driver(BASE_URL)
-
     if not robots_txt_allowed:
-        robots_txt_allowed = check_allowed_webscraping(driver)
+        raise PermissionError("Sales scraping requires a successful robots.txt check.")
 
+    driver, wait = init_driver(URLS["sales"])
     try:
         initialize_search(wait, request.start, request.end)
-        time.sleep(2)
         check = check_reset_needed(
             driver, wait, request.start, request.end, request.ranges
         )
@@ -326,10 +323,7 @@ def main(
             logger.info("Reset needed, closing WebDriver.")
             return pd.DataFrame(), check.dates, driver, check.modified
 
-        data = get_csv_data(wait)
-        if data.empty and len(request.ranges) == 1:
-            logger.info(f"No data for {request.start} to {request.end}.")
-            return pd.DataFrame(), check.dates, driver, check.modified
+        data = get_csv_data(wait, expected_rows=check.total_entries)
             
         logger.info(
             f"Completed scraping for {request.start} to {request.end}: {data.shape[0]} rows."
@@ -342,5 +336,4 @@ def main(
 
 
 if __name__ == "__main__":
-    load_dotenv()
     run_scraper_pipeline()

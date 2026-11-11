@@ -1,11 +1,22 @@
 from __future__ import annotations
 
-from typing import List
-
 import pandas as pd
 from supabase import Client
 
 from hch_scraper.loaders.supabase_loader import make_record_key, make_row_hash
+
+
+def prepare_sales_records(df: pd.DataFrame) -> list[dict]:
+    """Prepare the records sent to the sales upsert RPC."""
+    if df.empty:
+        return []
+    df = df.drop_duplicates().loc[lambda d: d["parcel_number"].notna()]
+    df.columns = df.columns.str.lower()
+    records = df.to_dict(orient="records")
+    for record in records:
+        record["record_key"] = make_record_key(record)
+        record["row_hash"] = make_row_hash(record)
+    return records
 
 
 def upsert_sales_raw(
@@ -31,19 +42,9 @@ def upsert_sales_raw(
     Returns:
         Total number of rows attempted to upsert.
     """
-    if df.empty:
-        return 0
-
-    df = df.drop_duplicates().loc[lambda d: d["parcel_number"].notna()]
-    df.columns = df.columns.str.lower()
-
-    records: List[dict] = df.to_dict(orient="records")
-
     total = 0
-    for r in records:
-        r["record_key"] = make_record_key(r)
-        r["row_hash"] = make_row_hash(r)
-        response = supabase.rpc("upsert_sales_hamilton", {"p": r}).execute()
+    for record in prepare_sales_records(df):
+        response = supabase.rpc("upsert_sales_hamilton", {"p": record}).execute()
 
         # Optionally check for errors
         if getattr(response, "error", None):

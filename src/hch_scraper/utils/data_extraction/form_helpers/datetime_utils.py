@@ -1,7 +1,7 @@
 import re
 import time
 import pandas as pd
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import List, Tuple, Any, Union, Optional
 from dataclasses import dataclass
 
@@ -9,7 +9,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 
 from hch_scraper.utils.logging_setup import logger
-from hch_scraper.config.settings import XPATHS
+from hch_scraper.config.settings import SCRAPING_CONFIG, XPATHS
 
 
 @dataclass
@@ -154,8 +154,7 @@ def check_reset_needed(
 
     if total_entries is None:
         logger.warning(
-            "Could not determine total search result entries for %s to %s. "
-            "Continuing without date-range split for this iteration.",
+            "Could not determine total search result entries for %s to %s.",
             start,
             end,
         )
@@ -166,16 +165,18 @@ def check_reset_needed(
             total_entries=None,
         )
 
-    if total_entries >= 1000:
+    if total_entries >= SCRAPING_CONFIG["max_entries_per_page"]:
+        if start_dt == end_dt:
+            raise ValueError(f"Sales results reached the site's limit for {start}.")
         logger.info(
             f"Entries = {total_entries} for {start} to {end}. Splitting dates further since the entries are greater than or equal to the threshold of 1000."
         )
 
         # Calculating the midpoint of the start and end date
-        midpoint = start_dt + (end_dt - start_dt) / 2
+        midpoint = start_dt + timedelta(days=(end_dt - start_dt).days // 2)
 
         # Creating the new time slice
-        new_slice = (midpoint, end_dt)
+        new_slice = (midpoint + timedelta(days=1), end_dt)
 
         # Updating the list of dates
         updated_dates = update_date_range_and_append(dates, end_dt, midpoint, new_slice)
@@ -249,10 +250,15 @@ def _extract_total_entries_once(driver, wait) -> Optional[int]:
             EC.presence_of_element_located((By.XPATH, XPATHS["results"]["search_results_number"]))
         )
         raw_text = elem.text
-        m = re.search(r"of\s+([\d,]+)\s+entries", raw_text, re.I)
+        if raw_text.startswith("No results found."):
+            return 0
+        m = re.match(
+            r"Showing\s+[\d,]+\s*(?:[–-]|to)\s*[\d,]+\s+of\s+([\d,]+)\b",
+            raw_text,
+            re.I,
+        )
         if m:
             return int(m.group(1).replace(",", ""))
-        nums = re.findall(r"\d+", raw_text)
-        return int(max(nums)) if nums else None
+        return None
     except Exception:
         return None

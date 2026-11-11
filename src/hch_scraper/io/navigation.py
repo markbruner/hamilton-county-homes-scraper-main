@@ -1,12 +1,10 @@
 import time
+from datetime import datetime
 from urllib.robotparser import RobotFileParser
-
-import sys
-import selenium
-import selenium.webdriver
 
 # Selenium-related imports
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.common.exceptions import (
     NoSuchElementException,
@@ -16,10 +14,7 @@ from selenium.common.exceptions import (
 )
 
 from hch_scraper.utils.logging_setup import logger
-from hch_scraper.config.settings import form_xpaths_list, XPATHS, URLS
-from hch_scraper.utils.data_extraction.form_helpers.selenium_utils import (
-    fill_form_field,
-)
+from hch_scraper.config.settings import XPATHS, URLS
 
 # ----------------------------------------
 # Custom Exception
@@ -43,8 +38,6 @@ class SafeClickError(Exception):
 def safe_click(
     wait: WebDriverWait, xpath: str, retries: int = 3, delay: int = 1, log: bool = True
 ) -> bool:
-    from selenium.webdriver.support import expected_conditions as EC
-
     """
     Clicks an element located by its XPath with retries and optional logging.
 
@@ -111,54 +104,26 @@ def next_navigation(driver, wait: WebDriverWait, xpath: str) -> bool:
 
 
 def initialize_search(wait: WebDriverWait, start: str, end: str) -> None:
-    """
-    Executes the initial form selection and date filter setup for the property search.
-
-    Args:
-        wait (WebDriverWait): WebDriverWait instance to control interactions.
-        start (str): Start date string for the sale date filter (MM/DD/YYYY).
-        end (str): End date string for the sale date filter (MM/DD/YYYY).
-
-    Behavior:
-        - Selects the property search tab and sales radio option.
-        - Inputs the start and end sale dates.
-        - Clicks any additional form field XPaths defined in `form_xpaths_list`.
-    """
-    safe_click(wait, XPATHS["search"]["property_search"])
-    safe_click(wait, XPATHS["search"]["sales_radio_button"])
-
-    fill_form_field(wait, "sale_date_low", start)
-    fill_form_field(wait, "sale_date_high", end)
-
-    for xpath in form_xpaths_list:
-        safe_click(wait, xpath)
+    """Submit a sales search for the supplied MM/DD/YYYY date range."""
+    dates = [
+        datetime.strptime(value, "%m/%d/%Y").date().isoformat()
+        for value in (start, end)
+    ]
+    safe_click(wait, XPATHS["search"]["sales_tab"])
+    for field_id, value in zip(("sale-date-low", "sale-date-high"), dates):
+        field = wait.until(EC.visibility_of_element_located((By.ID, field_id)))
+        # Native date inputs use ISO values regardless of the browser locale.
+        field.parent.execute_script("arguments[0].value = arguments[1];", field, value)
+        if field.get_property("value") != value:
+            raise ValueError(f"Could not set transfer date field {field_id}.")
+    safe_click(wait, XPATHS["search"]["sales_submit"])
 
 
-def check_allowed_webscraping(driver) -> bool:
-    """
-    Validates whether web scraping is allowed for the site based on `robots.txt`.
-
-    Args:
-        driver: Selenium WebDriver instance, used to quit if disallowed.
-
-    Returns:
-        bool: True if scraping is allowed, False otherwise.
-
-    Behavior:
-        - Parses the site's `robots.txt` file.
-        - Quits the driver and logs if scraping is disallowed.
-    """
-    ROBOTS_TXT_URL = URLS["robots"]
-    BASE_URL = URLS["base"]
-
-    rp = RobotFileParser()
-    rp.set_url(ROBOTS_TXT_URL)
-    rp.read()
-
-    if rp.can_fetch("*", BASE_URL):
-        logger.info(f"Scraping allowed for {BASE_URL}")
-        return True
-    else:
-        print(f"Scraping NOT allowed for {BASE_URL}")
-        driver.quit()
-        return False
+def check_allowed_webscraping() -> bool:
+    """Check robots.txt for the sales form, results, and export paths."""
+    rules = RobotFileParser(URLS["sales_robots"])
+    rules.read()
+    return all(
+        rules.can_fetch("*", URLS["sales"] + path)
+        for path in ("", "execute", "results", "results/csv")
+    )

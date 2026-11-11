@@ -16,7 +16,6 @@ To run:
     $ python -m src.hch_scraper.main
 """
 
-import time
 import os
 import pandas as pd
 from datetime import datetime, date, timedelta
@@ -180,6 +179,9 @@ def _scrape_all_dates(
             if modified:
                 break
 
+            if all_data.empty:
+                continue
+
             all_data, _addr_issues = _enrich_addresses(all_data)
 
             if "transfer_date" in all_data.columns:
@@ -224,14 +226,9 @@ def run_scraper_pipeline():
     """
     load_dotenv()
     dates = get_user_input()
-    driver, wait = init_driver(URLS["base"])
-
-    try:
-        robots_txt_allowed = check_allowed_webscraping(driver)
-    finally:
-        safe_quit(driver)
-
-    run_scraper_for_dates(dates, robots_txt_allowed)
+    if not check_allowed_webscraping():
+        raise PermissionError("The auditor's robots.txt disallows sales scraping.")
+    run_scraper_for_dates(dates, robots_txt_allowed=True)
 
 
 def _consolidate_data(existing: pd.DataFrame, new_data: pd.DataFrame) -> pd.DataFrame:
@@ -279,7 +276,7 @@ def _initialize_ranges(
     ranges = []
 
     current_start = start_dt
-    while current_start < end_dt:
+    while current_start <= end_dt:
         current_end = min(current_start + step, end_dt)
         ranges.append((current_start.strftime(fmt), current_end.strftime(fmt)))
         current_start += step + timedelta(days=1)
@@ -304,15 +301,12 @@ def main(
             - bool: Whether reset was triggered (i.e., result count exceeded max).
     """
 
-    BASE_URL = URLS["base"]
-    driver, wait = init_driver(BASE_URL)
-
     if not robots_txt_allowed:
-        robots_txt_allowed = check_allowed_webscraping(driver)
+        raise PermissionError("Sales scraping requires a successful robots.txt check.")
 
+    driver, wait = init_driver(URLS["sales"])
     try:
         initialize_search(wait, request.start, request.end)
-        time.sleep(2)
         check = check_reset_needed(
             driver, wait, request.start, request.end, request.ranges
         )
@@ -320,7 +314,7 @@ def main(
             logger.info("Reset needed, closing WebDriver.")
             return pd.DataFrame(), check.dates, driver, check.modified
 
-        data = get_csv_data(wait)
+        data = get_csv_data(wait, expected_rows=check.total_entries)
 
         logger.info(
             f"Completed scraping for {request.start} to {request.end}: {data.shape[0]} rows."

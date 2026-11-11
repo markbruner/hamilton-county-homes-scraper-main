@@ -1,3 +1,7 @@
+from types import SimpleNamespace
+
+import pytest
+
 from hch_scraper.utils.data_extraction.form_helpers import datetime_utils as du
 
 
@@ -46,8 +50,36 @@ def test_check_reset_needed_splits_when_entries_meet_threshold(monkeypatch):
 
     assert result.reset_needed is True
     assert result.modified is True
-    assert len(result.dates) == 2
+    assert result.dates == [
+        ("01/01/2026", "01/04/2026"),
+        ("01/05/2026", "01/07/2026"),
+    ]
     assert result.total_entries == 1000
+
+
+@pytest.mark.parametrize(
+    ("status", "expected_count"),
+    [
+        ("Showing 1–10 of 136", 136),
+        ("Showing 991–1,000 of 1,000", 1000),
+        ("No results found. Try a new search.", 0),
+    ],
+)
+def test_extract_wedge_sales_count(status, expected_count):
+    class ResultsWait:
+        def until(self, _condition):
+            return SimpleNamespace(text=status)
+
+    assert du._extract_total_entries_once(_DummyDriver(), ResultsWait()) == expected_count
+
+
+def test_capped_single_day_cannot_be_split(monkeypatch):
+    monkeypatch.setattr(du, "_get_dt_record_count", lambda _driver: 1000)
+    with pytest.raises(ValueError, match="limit for 01/01/2026"):
+        du.check_reset_needed(
+            _DummyDriver(), _DummyWait(), "01/01/2026", "01/01/2026",
+            [("01/01/2026", "01/01/2026")],
+        )
 
 
 def test_check_reset_needed_retries_until_count_available(monkeypatch):

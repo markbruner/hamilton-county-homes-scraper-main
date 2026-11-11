@@ -2,29 +2,32 @@ name: Daily Hamilton County Scrape
 
 on:
   schedule:
-    # Runs every day at 8:00 AM America/New_York
-    # GitHub cron is in UTC → 6:30 AM ET = 11:30 UTC (standard time)
+    # Daily at 12:25 UTC.
     - cron: "25 12 * * *"
-  workflow_dispatch:  # allow manual runs from the Actions tab
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Prepare sales records without writing to Supabase
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
 
 jobs:
   scrape:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     # prevent overlapping runs
     concurrency:
       group: daily-hch-scrape
       cancel-in-progress: false
 
-    env:
-      # Supabase secrets
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-
-
     steps:
       - name: Check out repo
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -37,9 +40,24 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run daily scraper
+      - name: Check browser and driver
         run: |
-          export PYTHONPATH="$PYTHONPATH:${GITHUB_WORKSPACE}/src"
+          firefox --version
+          geckodriver --version
+
+      - name: Dry run daily scraper
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+        run: python -m hch_scraper.pipelines.daily_scraper --dry-run --min_days_ago 1 --max_days_ago 3
+
+      - name: Run daily scraper and load sales
+        if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run)
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
           python -m hch_scraper.pipelines.daily_scraper \
             --min_days_ago 1 \
             --max_days_ago 3

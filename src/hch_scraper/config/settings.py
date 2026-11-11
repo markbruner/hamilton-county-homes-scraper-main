@@ -12,16 +12,11 @@ def load_config(file_path):
 
 XPATHS = load_config(CONFIG_PATH)
 
-# Form elements used in multiple scrapers
-form_xpaths_list = [
-    # XPATHS["search"]["conventional_home_type"],
-    XPATHS["search"]["form_search_button"]
-]
-
 # Web and API endpoints
 URLS = {
     "base": "https://www.hamiltoncountyauditor.org",
-    "robots": "https://www.hamiltoncountyauditor.org/robots.txt",
+    "sales": "https://wedge.hcauditor.org/",
+    "sales_robots": "https://wedge.hcauditor.org/robots.txt",
 }
 
 CACHE_PATHS = {
